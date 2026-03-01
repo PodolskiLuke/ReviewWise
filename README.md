@@ -2,30 +2,82 @@
 # ReviewWise
 
 ## Overview
-A web app that integrates with GitHub/GitLab to provide AI-powered code reviews, suggest improvements, and flag bugs/security issues, tailored to team coding standards. Project name: ReviewWise.
+ReviewWise is a full-stack app that connects to GitHub/GitLab, fetches repository and pull request changes, and generates AI-assisted code reviews.
 
-## Features Roadmap
-
-### MVP
-
-### Next Steps
-
-### Advanced
+## Current Workflow
+1. User lands on login screen.
+2. User signs in with GitHub/GitLab.
+3. App routes authenticated users to the repositories page.
+4. User can search/select repositories and trigger PR review flows.
 
 ## Tech Stack
-- Frontend: Angular
-5. Register a new OAuth app on GitHub:
-	- Homepage URL: `http://localhost:5010/`
-	- Authorization callback URL: `http://localhost:5010/signin-github`
-	- Application description: AI-Assisted Code Review Tool for GitHub/GitLab pull requests. Uses AI to suggest improvements and flag issues, tailored to team coding standards.
-6. Register a new OAuth app on GitLab:
-	- Homepage URL: `http://localhost:5010/`
-	- Redirect URI: `http://localhost:5010/signin-gitlab`
-	- Application description: AI-Assisted Code Review Tool for GitHub/GitLab pull requests. Uses AI to suggest improvements and flag issues, tailored to team coding standards.
-7. Add your GitHub and GitLab ClientId and ClientSecret to `backend/ReviewWise.Api/appsettings.json` under `Authentication:GitHub` and `Authentication:GitLab`.
-8. Run `dotnet run` in `backend/ReviewWise.Api` to start the API server (it will run on http://localhost:5010 by default).
-9. Visit `http://localhost:5010/login` to authenticate with GitHub, or `/login-gitlab` for GitLab. Use `/logout` to sign out.
-Open to contributions! See CONTRIBUTING.md for guidelines.
+- Frontend: Angular 21 (standalone components, Karma/Jasmine tests)
+- Backend: ASP.NET Core + OAuth (GitHub/GitLab)
+- Database: SQLite (development)
 
- Ensure the ports and callback URLs in your OAuth app settings match the backend server (default: http://localhost:5010).
-- Database: SQLite (dev), upgradeable
+## Project Structure
+- Frontend app (Angular): repository root (`src/`, `package.json`)
+- Backend API: `backend/ReviewWise.Api`
+
+## Local Setup
+### 1) Prerequisites
+- Node.js + npm
+- .NET SDK
+
+### 2) Configure OAuth apps
+#### GitHub OAuth app
+- Homepage URL: `http://localhost:5010/`
+- Authorization callback URL: `http://localhost:5010/signin-github`
+
+#### GitLab OAuth app (optional)
+- Homepage URL: `http://localhost:5010/`
+- Redirect URI: `http://localhost:5010/signin-gitlab`
+
+### 3) Configure backend secrets
+Do not commit real secrets to source control. Use user secrets for local development:
+
+```bash
+cd backend/ReviewWise.Api
+dotnet user-secrets init
+dotnet user-secrets set "Authentication:GitHub:ClientId" "<YOUR_GITHUB_CLIENT_ID>"
+dotnet user-secrets set "Authentication:GitHub:ClientSecret" "<YOUR_GITHUB_CLIENT_SECRET>"
+dotnet user-secrets set "Authentication:GitLab:ClientId" "<YOUR_GITLAB_CLIENT_ID>"
+dotnet user-secrets set "Authentication:GitLab:ClientSecret" "<YOUR_GITLAB_CLIENT_SECRET>"
+dotnet user-secrets set "OpenAI:ApiKey" "<YOUR_OPENAI_API_KEY>"
+```
+
+### 4) Run backend
+```bash
+cd backend/ReviewWise.Api
+dotnet clean
+dotnet build
+dotnet run
+```
+
+Backend default URL: `http://localhost:5010`
+
+### 5) Run frontend
+```bash
+cd <repo-root>
+npm install
+npm start
+```
+
+Frontend default URL: `http://localhost:4200`
+
+## Testing
+From repo root:
+
+```bash
+npm test
+```
+
+Visual runner (Chrome watch mode):
+
+```bash
+npm run test:watch
+```
+
+## Notes
+- Backend returns `401/403` for unauthorized `/api/*` requests (no OAuth redirect for XHR).
+- Ensure OAuth callback URLs exactly match the configured backend endpoints.
