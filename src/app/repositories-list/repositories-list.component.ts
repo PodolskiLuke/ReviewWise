@@ -1,6 +1,8 @@
 import { CommonModule } from '@angular/common';
+import { HttpErrorResponse } from '@angular/common/http';
 import { Component, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { asyncScheduler, observeOn } from 'rxjs';
 import { ReviewWiseApiService } from '../services/reviewwise-api.service';
 
 @Component({
@@ -14,7 +16,7 @@ export class RepositoriesListComponent implements OnInit {
   filteredRepositories: any[] = [];
   selectedRepo: any = null;
   searchTerm: string = '';
-  loading = false;
+  loading = true;
   error: string | null = null;
 
   constructor(private api: ReviewWiseApiService) {}
@@ -26,14 +28,18 @@ export class RepositoriesListComponent implements OnInit {
   fetchRepositories() {
     this.loading = true;
     this.error = null;
-    this.api.getRepositories().subscribe({
+    this.api.getRepositories().pipe(observeOn(asyncScheduler)).subscribe({
       next: (repos) => {
         this.repositories = repos;
         this.filteredRepositories = repos;
         this.loading = false;
       },
-      error: (err) => {
-        this.error = 'Failed to load repositories.';
+      error: (err: HttpErrorResponse) => {
+        if (err.status === 401 || err.status === 403) {
+          this.error = 'Please log in to view repositories.';
+        } else {
+          this.error = 'Failed to load repositories.';
+        }
         this.loading = false;
       }
     });

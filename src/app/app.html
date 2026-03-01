@@ -24,6 +24,6 @@
     Signed in as {{ authUsername() || 'user' }}@if (authProvider()) { via {{ authProvider() }} }
     <a class="login-btn gitlab" [href]="logoutUrl">Logout</a>
   </div>
-}
 
-<router-outlet />
+  <router-outlet />
+}

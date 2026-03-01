@@ -13,22 +13,71 @@ builder.Logging.AddDebug();
 // Add services to the container.
 builder.Services.AddOpenApi();
 builder.Services.AddHttpClient();
+builder.Services.AddControllers();
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("FrontendDevPolicy", policy =>
+    {
+        policy
+            .WithOrigins("http://localhost:4200", "https://localhost:4200")
+            .AllowAnyHeader()
+            .AllowAnyMethod()
+            .AllowCredentials();
+    });
+});
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+var githubClientId = RequireConfiguredSetting(builder.Configuration, "Authentication:GitHub:ClientId");
+var githubClientSecret = RequireConfiguredSetting(builder.Configuration, "Authentication:GitHub:ClientSecret");
+
+var gitLabClientId = builder.Configuration["Authentication:GitLab:ClientId"];
+var gitLabClientSecret = builder.Configuration["Authentication:GitLab:ClientSecret"];
+var gitLabConfigured =
+    !string.IsNullOrWhiteSpace(gitLabClientId) &&
+    !string.IsNullOrWhiteSpace(gitLabClientSecret) &&
+    !gitLabClientId.StartsWith("YOUR_", StringComparison.OrdinalIgnoreCase) &&
+    !gitLabClientSecret.StartsWith("YOUR_", StringComparison.OrdinalIgnoreCase);
+
 builder.Services.AddAuthentication(options =>
 {
     options.DefaultScheme = "Cookies";
-    options.DefaultChallengeScheme = "GitHub";
+    options.DefaultChallengeScheme = "Cookies";
 })
 .AddCookie("Cookies", options =>
 {
     options.Cookie.SameSite = Microsoft.AspNetCore.Http.SameSiteMode.None;
     options.Cookie.SecurePolicy = Microsoft.AspNetCore.Http.CookieSecurePolicy.None;
+    options.Events = new Microsoft.AspNetCore.Authentication.Cookies.CookieAuthenticationEvents
+    {
+        OnRedirectToLogin = context =>
+        {
+            if (context.Request.Path.StartsWithSegments("/api"))
+            {
+                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                return Task.CompletedTask;
+            }
+
+            context.Response.Redirect(context.RedirectUri);
+            return Task.CompletedTask;
+        },
+        OnRedirectToAccessDenied = context =>
+        {
+            if (context.Request.Path.StartsWithSegments("/api"))
+            {
+                context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                return Task.CompletedTask;
+            }
+
+            context.Response.Redirect(context.RedirectUri);
+            return Task.CompletedTask;
+        }
+    };
 })
 .AddGitHub("GitHub", options =>
 {
-    options.ClientId = builder.Configuration["Authentication:GitHub:ClientId"];
-    options.ClientSecret = builder.Configuration["Authentication:GitHub:ClientSecret"];
+    options.ClientId = githubClientId;
+    options.ClientSecret = githubClientSecret;
     options.Scope.Add("repo");
     options.SaveTokens = true;
     options.Events.OnRemoteFailure = context =>
@@ -37,18 +86,20 @@ builder.Services.AddAuthentication(options =>
         context.Response.Redirect("http://localhost:4200/?authError=github_oauth_failed");
         return Task.CompletedTask;
     };
-})
-.AddGitLab("GitLab", options =>
-{
-    options.ClientId = builder.Configuration["Authentication:GitLab:ClientId"];
-    options.ClientSecret = builder.Configuration["Authentication:GitLab:ClientSecret"];
-    options.SaveTokens = true;
 });
+if (gitLabConfigured)
+{
+    builder.Services.AddAuthentication().AddGitLab("GitLab", options =>
+    {
+        options.ClientId = gitLabClientId!;
+        options.ClientSecret = gitLabClientSecret!;
+        options.SaveTokens = true;
+    });
+}
+
 builder.Services.AddAuthorization();
 
 var app = builder.Build();
-app.UseAuthentication();
-app.UseAuthorization();
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
@@ -57,6 +108,9 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+app.UseCors("FrontendDevPolicy");
+app.UseAuthentication();
+app.UseAuthorization();
 
 
 // Add login/logout endpoints
@@ -72,6 +126,15 @@ app.MapGet("/login", async (HttpContext context) =>
 app.MapGet("/login-gitlab", async (HttpContext context) =>
 {
     var logger = context.RequestServices.GetService<ILoggerFactory>()?.CreateLogger("OAuth");
+
+    if (!gitLabConfigured)
+    {
+        logger?.LogWarning("GitLab OAuth login requested but GitLab OAuth settings are not configured.");
+        context.Response.StatusCode = StatusCodes.Status400BadRequest;
+        await context.Response.WriteAsync("GitLab authentication is not configured.");
+        return;
+    }
+
     logger?.LogInformation("GitLab OAuth login initiated.");
     await context.ChallengeAsync("GitLab", new Microsoft.AspNetCore.Authentication.AuthenticationProperties { RedirectUri = "/" });
 });
@@ -109,4 +172,17 @@ app.MapGet("/api/auth/users", (HttpContext context) =>
     });
 });
 
+app.MapControllers();
+
 app.Run();
+
+static string RequireConfiguredSetting(IConfiguration configuration, string key)
+{
+    var value = configuration[key];
+    if (string.IsNullOrWhiteSpace(value) || value.StartsWith("YOUR_", StringComparison.OrdinalIgnoreCase))
+    {
+        throw new InvalidOperationException($"Missing required configuration value: '{key}'.");
+    }
+
+    return value;
+}
