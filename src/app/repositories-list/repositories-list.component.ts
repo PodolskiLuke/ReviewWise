@@ -2,7 +2,6 @@ import { CommonModule } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Component, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { asyncScheduler, observeOn } from 'rxjs';
 import { ReviewWiseApiService } from '../services/reviewwise-api.service';
 
 @Component({
@@ -22,13 +21,13 @@ export class RepositoriesListComponent implements OnInit {
   constructor(private api: ReviewWiseApiService) {}
 
   ngOnInit() {
-    this.fetchRepositories();
+    Promise.resolve().then(() => this.fetchRepositories());
   }
 
   fetchRepositories() {
     this.loading = true;
     this.error = null;
-    this.api.getRepositories().pipe(observeOn(asyncScheduler)).subscribe({
+    this.api.getRepositories().subscribe({
       next: (repos) => {
         this.repositories = repos;
         this.filteredRepositories = repos;
