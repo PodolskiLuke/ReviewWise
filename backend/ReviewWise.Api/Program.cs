@@ -19,7 +19,7 @@ builder.Services.AddCors(options =>
     options.AddPolicy("FrontendDevPolicy", policy =>
     {
         policy
-            .WithOrigins("http://localhost:4200", "https://localhost:4200")
+            .SetIsOriginAllowed(static origin => IsAllowedLocalDevOrigin(origin))
             .AllowAnyHeader()
             .AllowAnyMethod()
             .AllowCredentials();
@@ -42,11 +42,12 @@ var gitLabConfigured =
 builder.Services.AddAuthentication(options =>
 {
     options.DefaultScheme = "Cookies";
+    options.DefaultSignInScheme = "Cookies";
     options.DefaultChallengeScheme = "Cookies";
 })
 .AddCookie("Cookies", options =>
 {
-    options.Cookie.SameSite = Microsoft.AspNetCore.Http.SameSiteMode.None;
+    options.Cookie.SameSite = Microsoft.AspNetCore.Http.SameSiteMode.Lax;
     options.Cookie.SecurePolicy = Microsoft.AspNetCore.Http.CookieSecurePolicy.None;
     options.Events = new Microsoft.AspNetCore.Authentication.Cookies.CookieAuthenticationEvents
     {
@@ -76,6 +77,7 @@ builder.Services.AddAuthentication(options =>
 })
 .AddGitHub("GitHub", options =>
 {
+    options.SignInScheme = "Cookies";
     options.ClientId = githubClientId;
     options.ClientSecret = githubClientSecret;
     options.Scope.Add("repo");
@@ -83,7 +85,8 @@ builder.Services.AddAuthentication(options =>
     options.Events.OnRemoteFailure = context =>
     {
         context.HandleResponse();
-        context.Response.Redirect("http://localhost:4200/?authError=github_oauth_failed");
+        var frontendBaseUrl = ResolveFrontendBaseUrl(context.Request, builder.Configuration);
+        context.Response.Redirect($"{frontendBaseUrl}/?authError=github_oauth_failed");
         return Task.CompletedTask;
     };
 });
@@ -91,6 +94,7 @@ if (gitLabConfigured)
 {
     builder.Services.AddAuthentication().AddGitLab("GitLab", options =>
     {
+        options.SignInScheme = "Cookies";
         options.ClientId = gitLabClientId!;
         options.ClientSecret = gitLabClientSecret!;
         options.SaveTokens = true;
@@ -117,9 +121,10 @@ app.UseAuthorization();
 
 app.MapGet("/login", async (HttpContext context) =>
 {
-    var redirectUri = "http://localhost:4200/";
+    var frontendBaseUrl = ResolveFrontendBaseUrl(context.Request, builder.Configuration);
+    var redirectUri = $"{frontendBaseUrl}/home?oauth=1";
     var logger = context.RequestServices.GetService<ILoggerFactory>()?.CreateLogger("OAuth");
-    logger?.LogInformation($"GitHub OAuth login initiated. redirect_uri: {redirectUri}");
+    logger?.LogInformation("GitHub OAuth login initiated. redirect_uri: {RedirectUri}", redirectUri);
     await context.ChallengeAsync("GitHub", new Microsoft.AspNetCore.Authentication.AuthenticationProperties { RedirectUri = redirectUri });
 });
 
@@ -136,15 +141,17 @@ app.MapGet("/login-gitlab", async (HttpContext context) =>
     }
 
     logger?.LogInformation("GitLab OAuth login initiated.");
-    await context.ChallengeAsync("GitLab", new Microsoft.AspNetCore.Authentication.AuthenticationProperties { RedirectUri = "/" });
+    var frontendBaseUrl = ResolveFrontendBaseUrl(context.Request, builder.Configuration);
+    await context.ChallengeAsync("GitLab", new Microsoft.AspNetCore.Authentication.AuthenticationProperties { RedirectUri = $"{frontendBaseUrl}/home?oauth=1" });
 });
 
 app.MapGet("/logout", async (HttpContext context) =>
 {
     var logger = context.RequestServices.GetService<ILoggerFactory>()?.CreateLogger("OAuth");
+    var frontendBaseUrl = ResolveFrontendBaseUrl(context.Request, builder.Configuration);
     logger?.LogInformation("User logout initiated.");
     await context.SignOutAsync("Cookies");
-    context.Response.Redirect("http://localhost:4200/");
+    context.Response.Redirect($"{frontendBaseUrl}/");
 });
 
 app.MapGet("/api/auth/users", (HttpContext context) =>
@@ -185,4 +192,40 @@ static string RequireConfiguredSetting(IConfiguration configuration, string key)
     }
 
     return value;
+}
+
+static bool IsAllowedLocalDevOrigin(string origin)
+{
+    if (!Uri.TryCreate(origin, UriKind.Absolute, out var uri))
+    {
+        return false;
+    }
+
+    return uri.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase)
+        || uri.Host.Equals("127.0.0.1");
+}
+
+static string ResolveFrontendBaseUrl(HttpRequest request, IConfiguration configuration)
+{
+    var origin = request.Headers.Origin.ToString();
+    if (IsAllowedLocalDevOrigin(origin))
+    {
+        return origin.TrimEnd('/');
+    }
+
+    var referer = request.Headers.Referer.ToString();
+    if (Uri.TryCreate(referer, UriKind.Absolute, out var refererUri)
+        && (refererUri.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase)
+            || refererUri.Host.Equals("127.0.0.1")))
+    {
+        return $"{refererUri.Scheme}://{refererUri.Authority}";
+    }
+
+    var configuredBaseUrl = configuration["Frontend:BaseUrl"];
+    if (!string.IsNullOrWhiteSpace(configuredBaseUrl))
+    {
+        return configuredBaseUrl.TrimEnd('/');
+    }
+
+    return "http://localhost:4200";
 }

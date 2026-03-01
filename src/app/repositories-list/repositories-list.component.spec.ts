@@ -1,4 +1,4 @@
-import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
+import { ComponentFixture, TestBed, fakeAsync, flush } from '@angular/core/testing';
 import { of, throwError } from 'rxjs';
 import { RepositoriesListComponent } from './repositories-list.component';
 import { ReviewWiseApiService } from '../services/reviewwise-api.service';
@@ -34,7 +34,7 @@ describe('RepositoriesListComponent', () => {
     apiServiceSpy.getRepositories.and.returnValue(of(repositories));
 
     fixture.detectChanges();
-    tick();
+    flush();
 
     expect(apiServiceSpy.getRepositories).toHaveBeenCalled();
     expect(component.loading).toBeFalse();
@@ -49,7 +49,7 @@ describe('RepositoriesListComponent', () => {
     );
 
     fixture.detectChanges();
-    tick();
+    flush();
 
     expect(component.loading).toBeFalse();
     expect(component.error).toBe('Failed to load repositories.');
@@ -62,7 +62,7 @@ describe('RepositoriesListComponent', () => {
     );
 
     fixture.detectChanges();
-    tick();
+    flush();
 
     expect(component.loading).toBeFalse();
     expect(component.error).toBe('Please log in to view repositories.');

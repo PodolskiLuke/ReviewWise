@@ -1,7 +1,10 @@
 import { Routes } from '@angular/router';
+import { authGuard } from './auth.guard';
+import { LoggedInHomeComponent } from './logged-in-home/logged-in-home.component';
 import { RepositoriesListComponent } from './repositories-list/repositories-list.component';
 
 export const routes: Routes = [
-	{ path: '', component: RepositoriesListComponent },
-	{ path: 'repositories', component: RepositoriesListComponent }
+	{ path: '', component: LoggedInHomeComponent },
+	{ path: 'home', component: LoggedInHomeComponent },
+	{ path: 'repositories', component: RepositoriesListComponent, canActivate: [authGuard] }
 ];
