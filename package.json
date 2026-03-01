@@ -3,6 +3,8 @@
   "version": "0.0.0",
   "scripts": {
     "ng": "ng",
+    "dev:start": "powershell -ExecutionPolicy Bypass -File ./scripts/dev-start.ps1",
+    "dev:stop": "powershell -ExecutionPolicy Bypass -File ./scripts/dev-stop.ps1",
     "start": "ng serve --proxy-config proxy.conf.json",
     "build": "ng build",
     "watch": "ng build --watch --configuration development",

@@ -5,6 +5,7 @@ using System.Net.Http.Headers;
 using System.Security.Claims;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using System.Collections.Concurrent;
 
 namespace ReviewWise.Api.Controllers
 {
@@ -12,6 +13,7 @@ namespace ReviewWise.Api.Controllers
     [Route("api/repositories/{owner}/{repo}/pull-requests/{prNumber}/review")]
     public class ReviewController : ControllerBase
     {
+        private static readonly ConcurrentDictionary<string, DateTimeOffset> ReviewGenerationAttempts = new();
         private readonly IHttpClientFactory _httpClientFactory;
         private readonly IConfiguration _config;
         private readonly ReviewWise.Api.Data.AppDbContext _db;
@@ -52,6 +54,46 @@ namespace ReviewWise.Api.Controllers
         {
             var provider = User.FindFirstValue(ClaimTypes.AuthenticationMethod) ?? "GitHub";
             _logger.LogInformation("Starting review generation for {Owner}/{Repo} PR #{PrNumber} using provider {Provider}.", owner, repo, prNumber, provider);
+
+            var existingReview = await _db.ReviewResults
+                .Where(r => r.Owner == owner && r.Repo == repo && r.PrNumber == prNumber)
+                .OrderByDescending(r => r.CreatedAt)
+                .FirstOrDefaultAsync();
+
+            if (existingReview != null)
+            {
+                _logger.LogInformation("Reusing existing stored review for {Owner}/{Repo} PR #{PrNumber} created at {CreatedAt} by {Username}.", owner, repo, prNumber, existingReview.CreatedAt, existingReview.Username);
+                return Ok(new
+                {
+                    review = existingReview.Review,
+                    createdAt = existingReview.CreatedAt,
+                    username = existingReview.Username,
+                    reused = true
+                });
+            }
+
+            var username = User.Identity?.Name ?? "unknown";
+            var cooldownSeconds = _config.GetValue<int?>("ReviewGeneration:CooldownSeconds") ?? 60;
+            var now = DateTimeOffset.UtcNow;
+            var attemptKey = $"{username}|{owner}|{repo}|{prNumber}";
+
+            if (ReviewGenerationAttempts.TryGetValue(attemptKey, out var lastAttemptAt))
+            {
+                var elapsedSeconds = (now - lastAttemptAt).TotalSeconds;
+                if (elapsedSeconds < cooldownSeconds)
+                {
+                    var retryAfterSeconds = Math.Max(1, cooldownSeconds - (int)Math.Floor(elapsedSeconds));
+                    _logger.LogWarning("Review generation throttled for {Owner}/{Repo} PR #{PrNumber} by {Username}. Retry after {RetryAfterSeconds}s.", owner, repo, prNumber, username, retryAfterSeconds);
+                    Response.Headers.RetryAfter = retryAfterSeconds.ToString();
+                    return StatusCode(StatusCodes.Status429TooManyRequests, new
+                    {
+                        message = $"Review generation was requested too recently. Try again in {retryAfterSeconds} seconds.",
+                        retryAfterSeconds
+                    });
+                }
+            }
+
+            ReviewGenerationAttempts[attemptKey] = now;
 
             var accessToken = await HttpContext.GetTokenAsync("access_token");
             if (string.IsNullOrEmpty(accessToken))
@@ -147,7 +189,6 @@ namespace ReviewWise.Api.Controllers
                 return StatusCode(500, "Failed to generate review from OpenAI.");
             }
 
-            var username = User.Identity?.Name ?? "unknown";
             var reviewResult = new ReviewWise.Api.Models.ReviewResult
             {
                 Owner = owner,
@@ -162,7 +203,13 @@ namespace ReviewWise.Api.Controllers
 
             _logger.LogInformation("Stored generated review for {Owner}/{Repo} PR #{PrNumber} by {Username}.", owner, repo, prNumber, username);
 
-            return Ok(new { review });
+            return Ok(new
+            {
+                review,
+                createdAt = reviewResult.CreatedAt,
+                username = reviewResult.Username,
+                reused = false
+            });
         }
     }
 }

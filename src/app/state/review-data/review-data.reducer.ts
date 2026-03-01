@@ -9,6 +9,13 @@ export interface ReviewDataState {
   pullRequests: any[];
   pullRequestsLoading: boolean;
   pullRequestsError: string | null;
+  selectedPullRequest: any | null;
+  reviewLoading: boolean;
+  reviewError: string | null;
+  reviewText: string | null;
+  reviewMeta: string | null;
+  reviewStatusMessage: string | null;
+  reviewRetryAfterSeconds: number | null;
 }
 
 const initialState: ReviewDataState = {
@@ -18,7 +25,14 @@ const initialState: ReviewDataState = {
   selectedRepository: null,
   pullRequests: [],
   pullRequestsLoading: false,
-  pullRequestsError: null
+  pullRequestsError: null,
+  selectedPullRequest: null,
+  reviewLoading: false,
+  reviewError: null,
+  reviewText: null,
+  reviewMeta: null,
+  reviewStatusMessage: null,
+  reviewRetryAfterSeconds: null
 };
 
 export const reviewDataFeature = createFeature({
@@ -47,7 +61,14 @@ export const reviewDataFeature = createFeature({
       selectedRepository: repository,
       pullRequests: [],
       pullRequestsLoading: !!repository,
-      pullRequestsError: null
+      pullRequestsError: null,
+      selectedPullRequest: null,
+      reviewLoading: false,
+      reviewError: null,
+      reviewText: null,
+      reviewMeta: null,
+      reviewStatusMessage: null,
+      reviewRetryAfterSeconds: null
     })),
     on(ReviewDataActions.loadPullRequests, (state) => ({
       ...state,
@@ -66,6 +87,64 @@ export const reviewDataFeature = createFeature({
       pullRequests: [],
       pullRequestsLoading: false,
       pullRequestsError: error
+    })),
+    on(ReviewDataActions.selectPullRequest, (state, { pullRequest }) => ({
+      ...state,
+      selectedPullRequest: pullRequest,
+      reviewLoading: false,
+      reviewError: null,
+      reviewText: null,
+      reviewMeta: null,
+      reviewStatusMessage: null,
+      reviewRetryAfterSeconds: null
+    })),
+    on(ReviewDataActions.loadLatestReview, (state) => ({
+      ...state,
+      reviewLoading: true,
+      reviewError: null,
+      reviewText: null,
+      reviewMeta: null,
+      reviewStatusMessage: 'Loading latest review.',
+      reviewRetryAfterSeconds: null
+    })),
+    on(ReviewDataActions.loadLatestReviewSuccess, (state, { reviewText, reviewMeta, reviewStatusMessage }) => ({
+      ...state,
+      reviewLoading: false,
+      reviewError: null,
+      reviewText,
+      reviewMeta,
+      reviewStatusMessage,
+      reviewRetryAfterSeconds: null
+    })),
+    on(ReviewDataActions.loadLatestReviewFailure, (state, { error, reviewStatusMessage }) => ({
+      ...state,
+      reviewLoading: false,
+      reviewError: error,
+      reviewStatusMessage,
+      reviewRetryAfterSeconds: null
+    })),
+    on(ReviewDataActions.generateReview, (state) => ({
+      ...state,
+      reviewLoading: true,
+      reviewError: null,
+      reviewStatusMessage: 'Generating review.',
+      reviewRetryAfterSeconds: null
+    })),
+    on(ReviewDataActions.generateReviewSuccess, (state, { reviewText, reviewMeta, reviewStatusMessage }) => ({
+      ...state,
+      reviewLoading: false,
+      reviewError: null,
+      reviewText,
+      reviewMeta,
+      reviewStatusMessage,
+      reviewRetryAfterSeconds: null
+    })),
+    on(ReviewDataActions.generateReviewFailure, (state, { error, reviewStatusMessage, retryAfterSeconds }) => ({
+      ...state,
+      reviewLoading: false,
+      reviewError: error,
+      reviewStatusMessage,
+      reviewRetryAfterSeconds: retryAfterSeconds ?? null
     }))
   )
 });

@@ -9,6 +9,8 @@ import * as ReviewDataActions from './review-data.actions';
 export class ReviewDataEffects {
   readonly loadRepositories$;
   readonly loadPullRequests$;
+  readonly loadLatestReview$;
+  readonly generateReview$;
 
   constructor(private actions$: Actions, private api: ReviewWiseApiService) {
     this.loadRepositories$ = createEffect(() =>
@@ -63,6 +65,111 @@ export class ReviewDataEffects {
         )
       )
     );
+
+    this.loadLatestReview$ = createEffect(() =>
+      this.actions$.pipe(
+        ofType(ReviewDataActions.loadLatestReview),
+        switchMap(({ owner, repo, prNumber }) =>
+          this.api.getReviewResult(owner, repo, prNumber).pipe(
+            map((response: { review?: string; createdAt?: string; username?: string }) => {
+              const reviewText = response?.review ?? null;
+              return ReviewDataActions.loadLatestReviewSuccess({
+                reviewText,
+                reviewMeta: this.buildReviewMeta(response),
+                reviewStatusMessage: reviewText
+                  ? 'Latest review loaded and displayed.'
+                  : 'No latest review content was found.'
+              });
+            }),
+            catchError((err: HttpErrorResponse) => {
+              if (err.status === 404) {
+                return of(ReviewDataActions.generateReview({ owner, repo, prNumber }));
+              }
+
+              return of(ReviewDataActions.loadLatestReviewFailure({
+                error: err.status === 401 || err.status === 403
+                  ? 'Please log in to view review results.'
+                  : 'Failed to load review result.',
+                reviewStatusMessage: 'Loading latest review failed.'
+              }));
+            })
+          )
+        )
+      )
+    );
+
+    this.generateReview$ = createEffect(() =>
+      this.actions$.pipe(
+        ofType(ReviewDataActions.generateReview),
+        switchMap(({ owner, repo, prNumber }) =>
+          this.api.triggerReview(owner, repo, prNumber).pipe(
+            map((response: { review?: string; createdAt?: string; username?: string; reused?: boolean }) => ReviewDataActions.generateReviewSuccess({
+              reviewText: response?.review ?? 'Review generated, but no text was returned.',
+              reviewMeta: this.buildReviewMeta(response) ?? (response?.reused ? 'Latest saved review loaded' : 'Generated just now'),
+              reviewStatusMessage: response?.reused
+                ? 'Existing saved review loaded and displayed.'
+                : 'Review generated and displayed.'
+            })),
+            catchError((err: HttpErrorResponse) => {
+              if (err.status === 429) {
+                const retryAfterSeconds = this.getRetryAfterSeconds(err);
+                const retryMessage = retryAfterSeconds
+                  ? `Review generation is rate-limited. Try again in ${retryAfterSeconds} seconds.`
+                  : 'Review generation is rate-limited. Please wait a moment and try again.';
+
+                return of(ReviewDataActions.generateReviewFailure({
+                  error: retryMessage,
+                  reviewStatusMessage: retryMessage,
+                  retryAfterSeconds
+                }));
+              }
+
+              return of(ReviewDataActions.generateReviewFailure({
+                error: err.status === 401 || err.status === 403
+                  ? 'Please log in to generate a review.'
+                  : 'Failed to generate review.',
+                reviewStatusMessage: 'Review generation failed.'
+              }));
+            })
+          )
+        )
+      )
+    );
+  }
+
+  private getRetryAfterSeconds(err: HttpErrorResponse): number | null {
+    const bodyRetry = this.parsePositiveInteger((err.error as { retryAfterSeconds?: unknown } | null)?.retryAfterSeconds);
+    if (bodyRetry) {
+      return bodyRetry;
+    }
+
+    const headerRetry = err.headers?.get('Retry-After');
+    return this.parsePositiveInteger(headerRetry);
+  }
+
+  private parsePositiveInteger(value: unknown): number | null {
+    if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
+      return Math.floor(value);
+    }
+
+    if (typeof value === 'string') {
+      const parsed = Number.parseInt(value, 10);
+      if (!Number.isNaN(parsed) && parsed > 0) {
+        return parsed;
+      }
+    }
+
+    return null;
+  }
+
+  private buildReviewMeta(response: { createdAt?: string; username?: string }): string | null {
+    if (!response?.createdAt && !response?.username) {
+      return null;
+    }
+
+    const created = response.createdAt ? new Date(response.createdAt).toLocaleString() : null;
+    const user = response.username ? ` by ${response.username}` : '';
+    return created ? `Latest saved review: ${created}${user}` : `Latest saved review${user}`;
   }
 
   private normalizePullRequests(response: unknown): any[] | null {

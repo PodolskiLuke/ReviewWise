@@ -41,7 +41,6 @@
   @if (selectedRepo) {
   <div class="repo-detail">
     <h3>Selected repository: {{ selectedRepo.name }}</h3>
-    <p class="debug-state" aria-live="polite">Debug: {{ getPullRequestDebugState() }}</p>
 
     @if (pullRequestsLoading) {
       <div class="skeleton-list" aria-hidden="true">
@@ -87,11 +86,12 @@
     <div class="review-panel" id="review-panel" #reviewPanel tabindex="-1">
       @if (reviewStatusMessage) {
         <p class="sr-status" aria-live="polite">{{ reviewStatusMessage }}</p>
+        <p class="review-status" role="status" aria-live="polite">{{ reviewStatusMessage }}</p>
       }
 
       <div class="review-actions">
-        <button type="button" class="generate-btn" aria-label="Generate review" (click)="generateReview()" [disabled]="reviewLoading">
-          {{ reviewLoading ? 'Generating review…' : 'Generate review' }}
+        <button type="button" class="generate-btn" aria-label="Generate review" (click)="generateReview()" [disabled]="isGenerateButtonDisabled">
+          {{ generateButtonLabel }}
         </button>
         <button type="button" class="secondary-btn" aria-label="View latest review" (click)="viewLatestReview()" [disabled]="reviewLoading">
           View latest review
