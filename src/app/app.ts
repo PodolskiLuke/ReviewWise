@@ -26,7 +26,6 @@ export class App {
   protected readonly authUsername = signal<string | null>(null);
   protected readonly authProvider = signal<string | null>(null);
   protected readonly authError = signal<string | null>(null);
-  protected readonly authDebug = signal('checking session');
   private readonly maxOAuthAuthRetries = 8;
 
   private isPublicRootUrl(url: string): boolean {
@@ -41,7 +40,6 @@ export class App {
     this.authUsername.set(authenticated ? user?.username ?? null : null);
     this.authProvider.set(authenticated ? user?.provider ?? null : null);
     this.authChecked.set(true);
-    this.authDebug.set(authenticated ? `authenticated as ${user?.username ?? 'unknown'}` : 'unauthenticated');
 
     if (authenticated && isPlatformBrowser(this.platformId) && this.isPublicRootUrl(currentUrl)) {
       this.router.navigateByUrl('/home', { replaceUrl: true });
@@ -55,7 +53,6 @@ export class App {
       next: (user: { authenticated?: boolean; username?: string | null; provider?: string | null }) => {
         const authenticated = user?.authenticated === true;
         if (!authenticated && isOAuthReturn && attempt < this.maxOAuthAuthRetries) {
-          this.authDebug.set(`finalizing login (${attempt + 1}/${this.maxOAuthAuthRetries})`);
           setTimeout(() => this.runAuthCheck(true, attempt + 1), 300);
           return;
         }
@@ -64,7 +61,6 @@ export class App {
       },
       error: () => {
         if (isOAuthReturn && attempt < this.maxOAuthAuthRetries) {
-          this.authDebug.set(`finalizing login (${attempt + 1}/${this.maxOAuthAuthRetries})`);
           setTimeout(() => this.runAuthCheck(true, attempt + 1), 300);
           return;
         }
@@ -73,7 +69,6 @@ export class App {
         this.authUsername.set(null);
         this.authProvider.set(null);
         this.authChecked.set(true);
-        this.authDebug.set('auth check failed');
 
         if (isPlatformBrowser(this.platformId) && this.router.url !== '/') {
           this.router.navigateByUrl('/');
@@ -98,10 +93,6 @@ export class App {
         const nextUrl = `${window.location.pathname}${newSearch ? `?${newSearch}` : ''}${window.location.hash}`;
         window.history.replaceState({}, '', nextUrl);
       }
-    }
-
-    if (oauthReturn) {
-      this.authDebug.set('finalizing login');
     }
 
     this.runAuthCheck(oauthReturn);

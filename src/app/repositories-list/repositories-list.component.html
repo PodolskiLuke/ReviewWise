@@ -2,22 +2,122 @@
   <input
     type="text"
     placeholder="Search repositories..."
+    aria-label="Search repositories"
     [(ngModel)]="searchTerm"
     (input)="onSearch(searchTerm)"
     class="search-box"
   />
 
-  <div *ngIf="loading" class="loading">Loading repositories...</div>
-  <div *ngIf="error" class="error">{{ error }}</div>
+  @if (loading) {
+    <div class="loading">Loading repositories...</div>
+  }
 
-  <ul *ngIf="!loading && !error">
-    <li
-      *ngFor="let repo of filteredRepositories"
-      [class.selected]="selectedRepo && selectedRepo.id === repo.id"
-      (click)="selectRepo(repo)"
-    >
-      {{ repo.name }}
-      <span *ngIf="selectedRepo && selectedRepo.id === repo.id" class="selected-indicator">&#10003;</span>
-    </li>
-  </ul>
+  @if (error) {
+    <div class="error">{{ error }}</div>
+  }
+
+  @if (!loading && !error) {
+    <ul role="listbox" aria-label="Repositories">
+      @for (repo of filteredRepositories; track getRepoTrackKey(repo)) {
+        <li
+          [class.selected]="isRepoSelected(repo)"
+          [attr.aria-selected]="isRepoSelected(repo)"
+          role="option"
+          tabindex="0"
+          (click)="selectRepo(repo)"
+          (keydown.enter)="selectRepo(repo)"
+          (keydown.space)="selectRepo(repo); $event.preventDefault()"
+        >
+          {{ repo.name }}
+          @if (isRepoSelected(repo)) {
+            <span class="selected-indicator">&#10003;</span>
+          }
+        </li>
+      }
+    </ul>
+    <p class="keyboard-hint">Keyboard: use Enter or Space to select a repository.</p>
+  }
+
+  @if (selectedRepo) {
+  <div class="repo-detail">
+    <h3>Selected repository: {{ selectedRepo.name }}</h3>
+    <p class="debug-state" aria-live="polite">Debug: {{ getPullRequestDebugState() }}</p>
+
+    @if (pullRequestsLoading) {
+      <div class="skeleton-list" aria-hidden="true">
+        <div class="skeleton-line"></div>
+        <div class="skeleton-line"></div>
+        <div class="skeleton-line"></div>
+      </div>
+    }
+    @if (pullRequestsError) {
+      <div class="error">{{ pullRequestsError }}</div>
+    }
+
+    @if (!pullRequestsLoading && !pullRequestsError && pullRequests.length > 0) {
+      <ul class="pr-list" role="listbox" aria-label="Pull requests">
+        @for (pr of pullRequests; track getPrTrackKey(pr)) {
+          <li
+            [class.selected]="isPrSelected(pr)"
+            [attr.aria-selected]="isPrSelected(pr)"
+            role="option"
+            tabindex="0"
+            (click)="selectPullRequest(pr)"
+            (keydown.enter)="selectPullRequest(pr)"
+            (keydown.space)="selectPullRequest(pr); $event.preventDefault()"
+          >
+            {{ getPrLabel(pr) }}
+          </li>
+        }
+      </ul>
+      <p class="keyboard-hint">Keyboard: use Enter or Space to select a pull request.</p>
+    }
+
+    @if (selectedPullRequest) {
+      <a class="skip-link" href="#review-panel">Skip to review panel</a>
+    }
+
+    @if (!pullRequestsLoading && !pullRequestsError && (!pullRequests || pullRequests.length === 0)) {
+      <div class="loading">
+        No pull requests found.
+      </div>
+    }
+
+    @if (selectedPullRequest) {
+    <div class="review-panel" id="review-panel" #reviewPanel tabindex="-1">
+      @if (reviewStatusMessage) {
+        <p class="sr-status" aria-live="polite">{{ reviewStatusMessage }}</p>
+      }
+
+      <div class="review-actions">
+        <button type="button" class="generate-btn" aria-label="Generate review" (click)="generateReview()" [disabled]="reviewLoading">
+          {{ reviewLoading ? 'Generating review…' : 'Generate review' }}
+        </button>
+        <button type="button" class="secondary-btn" aria-label="View latest review" (click)="viewLatestReview()" [disabled]="reviewLoading">
+          View latest review
+        </button>
+      </div>
+
+      @if (reviewError) {
+        <div class="error">{{ reviewError }}</div>
+      }
+      @if (reviewMeta) {
+        <div class="review-meta">{{ reviewMeta }}</div>
+      }
+
+      @if (reviewLoading) {
+        <div class="skeleton-review" aria-hidden="true">
+          <div class="skeleton-line"></div>
+          <div class="skeleton-line"></div>
+          <div class="skeleton-line short"></div>
+        </div>
+      }
+
+      @if (reviewText) {
+        <pre class="review-output">{{ reviewText }}</pre>
+      }
+    </div>
+    }
+  </div>
+  }
 </div>

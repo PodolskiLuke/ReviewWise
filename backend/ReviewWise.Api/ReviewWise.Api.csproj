@@ -4,6 +4,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>reviewwise-api-4c3d7b66-0d67-4f4f-a2d9-7f5fba7f67f2</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>

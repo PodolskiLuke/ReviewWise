@@ -63,7 +63,10 @@ namespace ReviewWise.Api.Controllers
             var client = _httpClientFactory.CreateClient();
             string apiUrl;
             if (provider == "GitLab")
-                apiUrl = $"https://gitlab.com/api/v4/projects/{owner}%2F{repo}/merge_requests/{prNumber}/changes";
+            {
+                var fullPath = Uri.EscapeDataString($"{owner}/{repo}");
+                apiUrl = $"https://gitlab.com/api/v4/projects/{fullPath}/merge_requests/{prNumber}/changes";
+            }
             else
                 apiUrl = $"https://api.github.com/repos/{owner}/{repo}/pulls/{prNumber}/files";
 

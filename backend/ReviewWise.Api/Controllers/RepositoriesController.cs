@@ -74,9 +74,12 @@ namespace ReviewWise.Api.Controllers
             var client = _httpClientFactory.CreateClient();
             string apiUrl;
             if (provider == "GitLab")
-                apiUrl = $"https://gitlab.com/api/v4/projects/{owner}%2F{repo}/merge_requests";
+            {
+                var fullPath = Uri.EscapeDataString($"{owner}/{repo}");
+                apiUrl = $"https://gitlab.com/api/v4/projects/{fullPath}/merge_requests?state=all&per_page=100";
+            }
             else
-                apiUrl = $"https://api.github.com/repos/{owner}/{repo}/pulls";
+                apiUrl = $"https://api.github.com/repos/{owner}/{repo}/pulls?state=all&per_page=100";
 
             client.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("ReviewWise", "1.0"));
             client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
@@ -90,6 +93,51 @@ namespace ReviewWise.Api.Controllers
 
             var json = await response.Content.ReadAsStringAsync();
             var prs = JsonDocument.Parse(json).RootElement;
+
+            if (provider == "GitHub" && prs.ValueKind == JsonValueKind.Array && prs.GetArrayLength() == 0)
+            {
+                _logger.LogInformation("No pull requests found via pulls API for {Owner}/{Repo}. Falling back to issues API.", owner, repo);
+
+                var issuesUrl = $"https://api.github.com/repos/{owner}/{repo}/issues?state=all&per_page=100";
+                var issuesResponse = await client.GetAsync(issuesUrl);
+                if (issuesResponse.IsSuccessStatusCode)
+                {
+                    var issuesJson = await issuesResponse.Content.ReadAsStringAsync();
+                    var issues = JsonDocument.Parse(issuesJson).RootElement;
+
+                    if (issues.ValueKind == JsonValueKind.Array)
+                    {
+                        var pullRequestItems = new List<object>();
+
+                        foreach (var issue in issues.EnumerateArray())
+                        {
+                            if (!issue.TryGetProperty("pull_request", out _))
+                            {
+                                continue;
+                            }
+
+                            var number = issue.TryGetProperty("number", out var numberProp) ? numberProp.GetInt32() : 0;
+                            var title = issue.TryGetProperty("title", out var titleProp) ? titleProp.GetString() : "Untitled pull request";
+                            var state = issue.TryGetProperty("state", out var stateProp) ? stateProp.GetString() : "unknown";
+
+                            pullRequestItems.Add(new
+                            {
+                                number,
+                                title,
+                                state
+                            });
+                        }
+
+                        _logger.LogInformation("Fallback issues API returned {PullRequestCount} pull request-like items for {Owner}/{Repo}.", pullRequestItems.Count, owner, repo);
+                        return Ok(pullRequestItems);
+                    }
+                }
+                else
+                {
+                    _logger.LogWarning("Fallback issues API failed for {Owner}/{Repo} with status {StatusCode}.", owner, repo, (int)issuesResponse.StatusCode);
+                }
+            }
+
             _logger.LogInformation("Fetched {PullRequestCount} pull requests for {Owner}/{Repo} via {Provider}.", prs.GetArrayLength(), owner, repo, provider);
             return Ok(prs);
         }
