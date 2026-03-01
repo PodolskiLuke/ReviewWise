@@ -16,11 +16,13 @@ namespace ReviewWise.Api.Controllers
     {
         private readonly AppDbContext _db;
         private readonly IHttpClientFactory _httpClientFactory;
+        private readonly ILogger<UserProfileController> _logger;
 
-        public UserProfileController(AppDbContext db, IHttpClientFactory httpClientFactory)
+        public UserProfileController(AppDbContext db, IHttpClientFactory httpClientFactory, ILogger<UserProfileController> logger)
         {
             _db = db;
             _httpClientFactory = httpClientFactory;
+            _logger = logger;
         }
 
         [Authorize]
@@ -28,9 +30,14 @@ namespace ReviewWise.Api.Controllers
         public async Task<IActionResult> Get()
         {
             var provider = User.FindFirstValue(ClaimTypes.AuthenticationMethod) ?? "GitHub";
+            _logger.LogInformation("Fetching user profile from provider {Provider}.", provider);
+
             var accessToken = await HttpContext.GetTokenAsync("access_token");
             if (string.IsNullOrEmpty(accessToken))
+            {
+                _logger.LogWarning("User profile request unauthorized due to missing access token.");
                 return Unauthorized();
+            }
 
             var client = _httpClientFactory.CreateClient();
             string apiUrl;
@@ -44,27 +51,32 @@ namespace ReviewWise.Api.Controllers
 
             var response = await client.GetAsync(apiUrl);
             if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogWarning("User profile fetch failed for provider {Provider} with status {StatusCode}.", provider, (int)response.StatusCode);
                 return StatusCode((int)response.StatusCode, await response.Content.ReadAsStringAsync());
+            }
 
             var json = await response.Content.ReadAsStringAsync();
             var userInfo = JsonDocument.Parse(json).RootElement;
 
-            // Extract user info
             string username = provider == "GitLab" ? userInfo.GetProperty("username").GetString() : userInfo.GetProperty("login").GetString();
             string? email = userInfo.TryGetProperty("email", out var emailProp) ? emailProp.GetString() : null;
 
-            // Store or update user in DB
             var user = await _db.Users.FirstOrDefaultAsync(u => u.Username == username);
             if (user == null)
             {
                 user = new User { Username = username, Email = email };
                 _db.Users.Add(user);
+                _logger.LogInformation("Created local profile record for user {Username} from provider {Provider}.", username, provider);
             }
             else
             {
                 user.Email = email;
+                _logger.LogInformation("Updated local profile record for user {Username} from provider {Provider}.", username, provider);
             }
             await _db.SaveChangesAsync();
+
+            _logger.LogInformation("Returning user profile payload for {Username} from provider {Provider}.", username, provider);
 
             return Ok(new { username, email });
         }

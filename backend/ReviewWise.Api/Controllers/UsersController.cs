@@ -9,15 +9,20 @@ namespace ReviewWise.Api.Controllers
     public class UsersController : ControllerBase
     {
         private readonly AppDbContext _context;
-        public UsersController(AppDbContext context)
+        private readonly ILogger<UsersController> _logger;
+
+        public UsersController(AppDbContext context, ILogger<UsersController> logger)
         {
             _context = context;
+            _logger = logger;
         }
 
         [HttpGet]
         public IActionResult GetUsers()
         {
-            return Ok(_context.Users.ToList());
+            var users = _context.Users.ToList();
+            _logger.LogInformation("Returning {UserCount} users from local database.", users.Count);
+            return Ok(users);
         }
     }
 }

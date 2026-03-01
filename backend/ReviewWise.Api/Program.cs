@@ -71,20 +71,26 @@ app.MapGet("/login", async (HttpContext context) =>
 
 app.MapGet("/login-gitlab", async (HttpContext context) =>
 {
+    var logger = context.RequestServices.GetService<ILoggerFactory>()?.CreateLogger("OAuth");
+    logger?.LogInformation("GitLab OAuth login initiated.");
     await context.ChallengeAsync("GitLab", new Microsoft.AspNetCore.Authentication.AuthenticationProperties { RedirectUri = "/" });
 });
 
 app.MapGet("/logout", async (HttpContext context) =>
 {
+    var logger = context.RequestServices.GetService<ILoggerFactory>()?.CreateLogger("OAuth");
+    logger?.LogInformation("User logout initiated.");
     await context.SignOutAsync("Cookies");
     context.Response.Redirect("http://localhost:4200/");
 });
 
 app.MapGet("/api/auth/users", (HttpContext context) =>
 {
+    var logger = context.RequestServices.GetService<ILoggerFactory>()?.CreateLogger("AuthUsers");
     var isAuthenticated = context.User?.Identity?.IsAuthenticated == true;
     if (!isAuthenticated)
     {
+        logger?.LogInformation("Auth status requested for anonymous user.");
         return Results.Ok(new { authenticated = false });
     }
 
@@ -92,6 +98,8 @@ app.MapGet("/api/auth/users", (HttpContext context) =>
     var username = context.User?.Identity?.Name
         ?? context.User?.FindFirst(ClaimTypes.Name)?.Value
         ?? context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+    logger?.LogInformation("Auth status requested for authenticated user {Username} via {Provider}.", username, provider);
 
     return Results.Ok(new
     {
