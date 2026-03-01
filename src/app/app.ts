@@ -49,8 +49,8 @@ export class App {
         this.authProvider.set(authenticated ? user?.provider ?? null : null);
         this.authChecked.set(true);
 
-        if (authenticated) {
-          this.router.navigate(['/repositories']);
+        if (authenticated && isPlatformBrowser(this.platformId) && this.router.url !== '/repositories') {
+          this.router.navigateByUrl('/repositories');
         }
       },
       error: () => {
@@ -59,7 +59,9 @@ export class App {
         this.authProvider.set(null);
         this.authChecked.set(true);
 
-        this.router.navigate(['/']);
+        if (isPlatformBrowser(this.platformId) && this.router.url === '/repositories') {
+          this.router.navigateByUrl('/');
+        }
       }
     });
   }
