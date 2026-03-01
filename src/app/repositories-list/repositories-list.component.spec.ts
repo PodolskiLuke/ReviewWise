@@ -1,4 +1,4 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { of, throwError } from 'rxjs';
 import { RepositoriesListComponent } from './repositories-list.component';
 import { ReviewWiseApiService } from '../services/reviewwise-api.service';
@@ -26,7 +26,7 @@ describe('RepositoriesListComponent', () => {
     expect(component).toBeTruthy();
   });
 
-  it('should load repositories on init', () => {
+  it('should load repositories on init', fakeAsync(() => {
     const repositories = [
       { id: 1, name: 'ReviewWise' },
       { id: 2, name: 'AnotherRepo' },
@@ -34,25 +34,39 @@ describe('RepositoriesListComponent', () => {
     apiServiceSpy.getRepositories.and.returnValue(of(repositories));
 
     fixture.detectChanges();
+    tick();
 
     expect(apiServiceSpy.getRepositories).toHaveBeenCalled();
     expect(component.loading).toBeFalse();
     expect(component.error).toBeNull();
     expect(component.repositories).toEqual(repositories);
     expect(component.filteredRepositories).toEqual(repositories);
-  });
+  }));
 
-  it('should set error when repositories request fails', () => {
+  it('should set error when repositories request fails', fakeAsync(() => {
     apiServiceSpy.getRepositories.and.returnValue(
       throwError(() => new Error('network failure'))
     );
 
     fixture.detectChanges();
+    tick();
 
     expect(component.loading).toBeFalse();
     expect(component.error).toBe('Failed to load repositories.');
     expect(component.repositories).toEqual([]);
-  });
+  }));
+
+  it('should prompt login when repositories request is unauthorized', fakeAsync(() => {
+    apiServiceSpy.getRepositories.and.returnValue(
+      throwError(() => ({ status: 401 }))
+    );
+
+    fixture.detectChanges();
+    tick();
+
+    expect(component.loading).toBeFalse();
+    expect(component.error).toBe('Please log in to view repositories.');
+  }));
 
   it('should filter repositories by search term', () => {
     component.repositories = [

@@ -59,7 +59,16 @@ namespace ReviewWise.Api.Controllers
             var json = await response.Content.ReadAsStringAsync();
             var userInfo = JsonDocument.Parse(json).RootElement;
 
-            string username = provider == "GitLab" ? userInfo.GetProperty("username").GetString() : userInfo.GetProperty("login").GetString();
+            var username = provider == "GitLab"
+                ? userInfo.GetProperty("username").GetString()
+                : userInfo.GetProperty("login").GetString();
+
+            if (string.IsNullOrWhiteSpace(username))
+            {
+                _logger.LogWarning("User profile payload from {Provider} did not contain a valid username.", provider);
+                return StatusCode(502, "Invalid profile response from OAuth provider.");
+            }
+
             string? email = userInfo.TryGetProperty("email", out var emailProp) ? emailProp.GetString() : null;
 
             var user = await _db.Users.FirstOrDefaultAsync(u => u.Username == username);

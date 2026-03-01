@@ -1,7 +1,7 @@
 
 import { Component, inject, PLATFORM_ID, signal } from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
-import { RouterOutlet } from '@angular/router';
+import { Router, RouterOutlet } from '@angular/router';
 import { environment } from '../environments/environment';
 import { ReviewWiseApiService } from './services/reviewwise-api.service';
 
@@ -14,6 +14,7 @@ import { ReviewWiseApiService } from './services/reviewwise-api.service';
 export class App {
   private readonly api = inject(ReviewWiseApiService);
   private readonly platformId = inject(PLATFORM_ID);
+  private readonly router = inject(Router);
 
   protected readonly title = signal('idea');
   protected readonly environment = environment;
@@ -47,12 +48,18 @@ export class App {
         this.authUsername.set(authenticated ? user?.username ?? null : null);
         this.authProvider.set(authenticated ? user?.provider ?? null : null);
         this.authChecked.set(true);
+
+        if (authenticated) {
+          this.router.navigate(['/repositories']);
+        }
       },
       error: () => {
         this.isAuthenticated.set(false);
         this.authUsername.set(null);
         this.authProvider.set(null);
         this.authChecked.set(true);
+
+        this.router.navigate(['/']);
       }
     });
   }
