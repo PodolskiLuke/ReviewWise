@@ -10,7 +10,14 @@ export const {
   selectSelectedRepository,
   selectPullRequests,
   selectPullRequestsLoading,
-  selectPullRequestsError
+  selectPullRequestsError,
+  selectSelectedPullRequest,
+  selectReviewLoading,
+  selectReviewError,
+  selectReviewText,
+  selectReviewMeta,
+  selectReviewStatusMessage,
+  selectReviewRetryAfterSeconds
 } = reviewDataFeature;
 
 export const selectHasRepositories = createSelector(

@@ -1,8 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideMockStore, MockStore } from '@ngrx/store/testing';
-import { of } from 'rxjs';
 import { RepositoriesListComponent } from './repositories-list.component';
-import { ReviewWiseApiService } from '../services/reviewwise-api.service';
 import * as ReviewDataActions from '../state/review-data/review-data.actions';
 import { ReviewDataState } from '../state/review-data/review-data.reducer';
 
@@ -10,7 +8,6 @@ describe('RepositoriesListComponent', () => {
   let fixture: ComponentFixture<RepositoriesListComponent>;
   let component: RepositoriesListComponent;
   let store: MockStore;
-  let apiServiceSpy: jasmine.SpyObj<ReviewWiseApiService>;
 
   const initialReviewDataState: ReviewDataState = {
     repositories: [],
@@ -19,20 +16,21 @@ describe('RepositoriesListComponent', () => {
     selectedRepository: null,
     pullRequests: [],
     pullRequestsLoading: false,
-    pullRequestsError: null
+    pullRequestsError: null,
+    selectedPullRequest: null,
+    reviewLoading: false,
+    reviewError: null,
+    reviewText: null,
+    reviewMeta: null,
+    reviewStatusMessage: null,
+    reviewRetryAfterSeconds: null
   };
 
   beforeEach(async () => {
-    apiServiceSpy = jasmine.createSpyObj<ReviewWiseApiService>(
-      'ReviewWiseApiService',
-      ['getRepositories', 'getPullRequests', 'getReviewResult', 'triggerReview']
-    );
-
     await TestBed.configureTestingModule({
       imports: [RepositoriesListComponent],
       providers: [
-        provideMockStore({ initialState: { reviewData: initialReviewDataState } }),
-        { provide: ReviewWiseApiService, useValue: apiServiceSpy }
+        provideMockStore({ initialState: { reviewData: initialReviewDataState } })
       ],
     }).compileComponents();
 
@@ -84,45 +82,64 @@ describe('RepositoriesListComponent', () => {
     component.selectRepo(repository);
 
     expect(dispatchSpy).toHaveBeenCalledWith(ReviewDataActions.selectRepository({ repository }));
-    expect(dispatchSpy.calls.allArgs().filter((args) => (args[0] as any).type === ReviewDataActions.loadPullRequests.type).length).toBe(0);
+    expect(dispatchSpy.calls.count()).toBe(1);
   });
 
-  it('should expose pull request debug state', () => {
-    component.pullRequestsLoading = true;
-    component.pullRequestsElapsedSeconds = 5;
-    component.pullRequests = [{ number: 3, title: 'PR three' }];
-    component.pullRequestsError = 'Failed to load pull requests.';
-
-    const debugState = component.getPullRequestDebugState();
-
-    expect(debugState).toContain('loading=true');
-    expect(debugState).toContain('elapsed=5s');
-    expect(debugState).toContain('count=1');
-    expect(debugState).toContain('error=Failed to load pull requests.');
-  });
-
-  it('should trigger review for selected pull request', () => {
+  it('should dispatch latest review load when selecting a pull request', () => {
     component.selectedRepo = { id: 1, name: 'repo1', owner: { login: 'owner1' } };
-    component.selectedPullRequest = { number: 7, title: 'Improve API' };
-    apiServiceSpy.triggerReview.and.returnValue(of({ review: 'Looks good overall.' }));
+    const pullRequest = { number: 7, title: 'Improve API' };
+    const dispatchSpy = spyOn(store, 'dispatch');
+
+    component.selectPullRequest(pullRequest);
+
+    expect(dispatchSpy).toHaveBeenCalledWith(ReviewDataActions.selectPullRequest({ pullRequest }));
+    expect(dispatchSpy).toHaveBeenCalledWith(
+      ReviewDataActions.loadLatestReview({ owner: 'owner1', repo: 'repo1', prNumber: 7 })
+    );
+  });
+
+  it('should dispatch generate review action for selected pull request', () => {
+    component.selectedRepo = { id: 1, name: 'repo1', owner: { login: 'owner1' } };
+    component.selectedPullRequest = { number: 8, title: 'Refactor service' };
+    const dispatchSpy = spyOn(store, 'dispatch');
 
     component.generateReview();
 
-    expect(apiServiceSpy.triggerReview).toHaveBeenCalledWith('owner1', 'repo1', 7);
-    expect(component.reviewText).toBe('Looks good overall.');
-    expect(component.reviewError).toBeNull();
+    expect(dispatchSpy).toHaveBeenCalledWith(
+      ReviewDataActions.generateReview({ owner: 'owner1', repo: 'repo1', prNumber: 8 })
+    );
   });
 
-  it('should fetch latest review when requested explicitly', () => {
+  it('should dispatch latest review load when requested explicitly', () => {
     component.selectedRepo = { id: 1, name: 'repo1', owner: { login: 'owner1' } };
     component.selectedPullRequest = { number: 8, title: 'Refactor service' };
-    apiServiceSpy.getReviewResult.and.returnValue(
-      of({ review: 'Stored review text', createdAt: '2026-03-01T10:00:00Z', username: 'reviewer1' })
-    );
+    const dispatchSpy = spyOn(store, 'dispatch');
 
     component.viewLatestReview();
 
-    expect(apiServiceSpy.getReviewResult).toHaveBeenCalledWith('owner1', 'repo1', 8);
-    expect(component.reviewText).toBe('Stored review text');
+    expect(dispatchSpy).toHaveBeenCalledWith(
+      ReviewDataActions.loadLatestReview({ owner: 'owner1', repo: 'repo1', prNumber: 8 })
+    );
+  });
+
+  it('should not dispatch generate review while cooldown is active', () => {
+    component.selectedRepo = { id: 1, name: 'repo1', owner: { login: 'owner1' } };
+    component.selectedPullRequest = { number: 8, title: 'Refactor service' };
+    component.reviewRetryCountdown = 10;
+    const dispatchSpy = spyOn(store, 'dispatch');
+
+    component.generateReview();
+
+    expect(dispatchSpy).not.toHaveBeenCalledWith(
+      ReviewDataActions.generateReview({ owner: 'owner1', repo: 'repo1', prNumber: 8 })
+    );
+  });
+
+  it('should expose cooldown-aware generate button label', () => {
+    component.reviewLoading = false;
+    component.reviewRetryCountdown = 7;
+
+    expect(component.generateButtonLabel).toBe('Try again in 7s');
+    expect(component.isGenerateButtonDisabled).toBeTrue();
   });
 });

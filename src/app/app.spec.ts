@@ -18,7 +18,7 @@ describe('App', () => {
 
   it('should set the app title signal', () => {
     const fixture = TestBed.createComponent(App);
-    const app = fixture.componentInstance as any;
+    const app = fixture.componentInstance as unknown as { title: () => string };
     expect(app.title()).toBe('idea');
   });
 });

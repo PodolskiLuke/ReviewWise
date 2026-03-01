@@ -1,18 +1,23 @@
 import { CommonModule } from '@angular/common';
-import { HttpErrorResponse } from '@angular/common/http';
 import { Component, DestroyRef, ElementRef, OnInit, ViewChild, inject } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { Store } from '@ngrx/store';
-import { ReviewWiseApiService } from '../services/reviewwise-api.service';
 import * as ReviewDataActions from '../state/review-data/review-data.actions';
 import {
   selectPullRequests,
   selectPullRequestsError,
   selectPullRequestsLoading,
+  selectReviewError,
+  selectReviewLoading,
+  selectReviewMeta,
+  selectReviewRetryAfterSeconds,
+  selectReviewStatusMessage,
+  selectReviewText,
   selectRepositories,
   selectRepositoriesError,
   selectRepositoriesLoading,
+  selectSelectedPullRequest,
   selectSelectedRepository
 } from '../state/review-data/review-data.selectors';
 
@@ -38,15 +43,16 @@ export class RepositoriesListComponent implements OnInit {
   reviewText: string | null = null;
   reviewMeta: string | null = null;
   reviewStatusMessage: string | null = null;
+  reviewRetryAfterSeconds: number | null = null;
+  reviewRetryCountdown = 0;
   searchTerm: string = '';
   loading = false;
   error: string | null = null;
-  private pullRequestsRequestId = 0;
-  private pullRequestsStartedAt: number | null = null;
-  pullRequestsElapsedSeconds = 0;
-  private pullRequestsHeartbeat: ReturnType<typeof setInterval> | null = null;
+  private retryCountdownIntervalId: ReturnType<typeof setInterval> | null = null;
 
-  constructor(private api: ReviewWiseApiService, private store: Store) {}
+  constructor(private store: Store) {
+    this.destroyRef.onDestroy(() => this.clearRetryCountdownInterval());
+  }
 
   ngOnInit() {
     this.bindStoreState();
@@ -77,25 +83,20 @@ export class RepositoriesListComponent implements OnInit {
       return;
     }
 
-    this.pullRequestsRequestId += 1;
     this.store.dispatch(ReviewDataActions.loadPullRequests({ owner, repo: repoName }));
   }
 
   selectPullRequest(pr: any) {
-    this.selectedPullRequest = pr;
-    this.reviewError = null;
-    this.reviewText = null;
-    this.reviewMeta = null;
-    this.reviewStatusMessage = 'Loading latest review for selected pull request.';
-    this.fetchLatestReview();
+    this.store.dispatch(ReviewDataActions.selectPullRequest({ pullRequest: pr }));
+    this.dispatchLoadLatestReview(pr);
   }
 
   viewLatestReview() {
-    this.fetchLatestReview();
+    this.dispatchLoadLatestReview(this.selectedPullRequest);
   }
 
   generateReview() {
-    if (!this.selectedRepo || !this.selectedPullRequest) {
+    if (!this.selectedRepo || !this.selectedPullRequest || this.isGenerateButtonDisabled) {
       return;
     }
 
@@ -108,26 +109,24 @@ export class RepositoriesListComponent implements OnInit {
       return;
     }
 
-    this.reviewLoading = true;
-    this.reviewError = null;
-    this.reviewStatusMessage = 'Generating review.';
+    this.store.dispatch(ReviewDataActions.generateReview({ owner, repo: repoName, prNumber }));
     this.focusReviewPanel();
+  }
 
-    this.api.triggerReview(owner, repoName, prNumber).subscribe({
-      next: (response: { review?: string }) => {
-        this.reviewText = response?.review ?? 'Review generated, but no text was returned.';
-        this.reviewMeta = 'Generated just now';
-        this.reviewLoading = false;
-        this.reviewStatusMessage = 'Review generated and displayed.';
-      },
-      error: (err: HttpErrorResponse) => {
-        this.reviewError = err.status === 401 || err.status === 403
-          ? 'Please log in to generate a review.'
-          : 'Failed to generate review.';
-        this.reviewLoading = false;
-        this.reviewStatusMessage = 'Review generation failed.';
-      }
-    });
+  get isGenerateButtonDisabled(): boolean {
+    return this.reviewLoading || this.reviewRetryCountdown > 0;
+  }
+
+  get generateButtonLabel(): string {
+    if (this.reviewLoading) {
+      return 'Generating review…';
+    }
+
+    if (this.reviewRetryCountdown > 0) {
+      return `Try again in ${this.reviewRetryCountdown}s`;
+    }
+
+    return 'Generate review';
   }
 
   private bindStoreState() {
@@ -156,6 +155,12 @@ export class RepositoriesListComponent implements OnInit {
         this.selectedRepo = repository;
       });
 
+    this.store.select(selectSelectedPullRequest)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((pullRequest) => {
+        this.selectedPullRequest = pullRequest;
+      });
+
     this.store.select(selectPullRequests)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((pullRequests) => {
@@ -172,13 +177,71 @@ export class RepositoriesListComponent implements OnInit {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((loading) => {
         this.pullRequestsLoading = loading;
-
-        if (loading) {
-          this.startPullRequestElapsedTimer();
-        } else {
-          this.stopPullRequestElapsedTimer();
-        }
       });
+
+    this.store.select(selectReviewLoading)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((loading) => {
+        this.reviewLoading = loading;
+      });
+
+    this.store.select(selectReviewError)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((error) => {
+        this.reviewError = error;
+      });
+
+    this.store.select(selectReviewText)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((reviewText) => {
+        this.reviewText = reviewText;
+      });
+
+    this.store.select(selectReviewMeta)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((reviewMeta) => {
+        this.reviewMeta = reviewMeta;
+      });
+
+    this.store.select(selectReviewStatusMessage)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((statusMessage) => {
+        this.reviewStatusMessage = statusMessage;
+      });
+
+    this.store.select(selectReviewRetryAfterSeconds)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((retryAfterSeconds) => {
+        this.reviewRetryAfterSeconds = retryAfterSeconds;
+        this.handleRetryAfterSeconds(retryAfterSeconds);
+      });
+  }
+
+  private handleRetryAfterSeconds(retryAfterSeconds: number | null) {
+    if (!retryAfterSeconds || retryAfterSeconds <= 0) {
+      this.reviewRetryCountdown = 0;
+      this.clearRetryCountdownInterval();
+      return;
+    }
+
+    this.reviewRetryCountdown = retryAfterSeconds;
+    this.clearRetryCountdownInterval();
+    this.retryCountdownIntervalId = setInterval(() => {
+      if (this.reviewRetryCountdown <= 1) {
+        this.reviewRetryCountdown = 0;
+        this.clearRetryCountdownInterval();
+        return;
+      }
+
+      this.reviewRetryCountdown -= 1;
+    }, 1000);
+  }
+
+  private clearRetryCountdownInterval() {
+    if (this.retryCountdownIntervalId) {
+      clearInterval(this.retryCountdownIntervalId);
+      this.retryCountdownIntervalId = null;
+    }
   }
 
   private applySearchFilter() {
@@ -188,74 +251,22 @@ export class RepositoriesListComponent implements OnInit {
     );
   }
 
-  private startPullRequestElapsedTimer() {
-    this.stopPullRequestElapsedTimer();
-    this.pullRequestsStartedAt = Date.now();
-    this.pullRequestsElapsedSeconds = 0;
-    this.pullRequestsHeartbeat = setInterval(() => {
-      if (!this.pullRequestsStartedAt) {
-        return;
-      }
-
-      this.pullRequestsElapsedSeconds = Math.floor((Date.now() - this.pullRequestsStartedAt) / 1000);
-    }, 1000);
-  }
-
-  private stopPullRequestElapsedTimer() {
-    if (this.pullRequestsHeartbeat) {
-      clearInterval(this.pullRequestsHeartbeat);
-      this.pullRequestsHeartbeat = null;
-    }
-
-    this.pullRequestsStartedAt = null;
-  }
-
-  private fetchLatestReview() {
-    if (!this.selectedRepo || !this.selectedPullRequest) {
+  private dispatchLoadLatestReview(pullRequest: any) {
+    if (!this.selectedRepo || !pullRequest) {
       return;
     }
 
     const owner = this.getRepoOwner(this.selectedRepo);
     const repoName = this.getRepoName(this.selectedRepo);
-    const prNumber = this.getPrNumber(this.selectedPullRequest);
+    const prNumber = this.getPrNumber(pullRequest);
 
     if (!owner || !repoName || !prNumber) {
       this.reviewError = 'Could not determine repository or pull request details.';
       return;
     }
 
-    this.reviewLoading = true;
-    this.reviewError = null;
-    this.reviewStatusMessage = 'Loading latest review.';
+    this.store.dispatch(ReviewDataActions.loadLatestReview({ owner, repo: repoName, prNumber }));
     this.focusReviewPanel();
-
-    this.api.getReviewResult(owner, repoName, prNumber).subscribe({
-      next: (response: { review?: string; createdAt?: string; username?: string }) => {
-        this.reviewText = response?.review ?? null;
-        if (response?.createdAt || response?.username) {
-          const created = response.createdAt ? new Date(response.createdAt).toLocaleString() : null;
-          const user = response.username ? ` by ${response.username}` : '';
-          this.reviewMeta = created ? `Latest saved review: ${created}${user}` : `Latest saved review${user}`;
-        } else {
-          this.reviewMeta = null;
-        }
-        this.reviewLoading = false;
-        this.reviewStatusMessage = this.reviewText
-          ? 'Latest review loaded and displayed.'
-          : 'No latest review content was found.';
-      },
-      error: (err: HttpErrorResponse) => {
-        if (err.status === 404) {
-          this.reviewStatusMessage = 'No saved review exists for this pull request yet.';
-        } else {
-          this.reviewError = err.status === 401 || err.status === 403
-            ? 'Please log in to view review results.'
-            : 'Failed to load review result.';
-          this.reviewStatusMessage = 'Loading latest review failed.';
-        }
-        this.reviewLoading = false;
-      }
-    });
   }
 
   getPrLabel(pr: any): string {
@@ -279,10 +290,6 @@ export class RepositoriesListComponent implements OnInit {
 
   isPrSelected(pr: any): boolean {
     return !!this.selectedPullRequest && this.getPrTrackKey(this.selectedPullRequest) === this.getPrTrackKey(pr);
-  }
-
-  getPullRequestDebugState(): string {
-    return `loading=${this.pullRequestsLoading} requestId=${this.pullRequestsRequestId} elapsed=${this.pullRequestsElapsedSeconds}s count=${this.pullRequests.length} error=${this.pullRequestsError ?? 'none'}`;
   }
 
   private getRepoOwner(repo: any): string | null {
