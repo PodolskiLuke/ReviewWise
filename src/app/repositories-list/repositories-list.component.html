@@ -1,0 +1,23 @@
+<div class="repositories-list">
+  <input
+    type="text"
+    placeholder="Search repositories..."
+    [(ngModel)]="searchTerm"
+    (input)="onSearch(searchTerm)"
+    class="search-box"
+  />
+
+  <div *ngIf="loading" class="loading">Loading repositories...</div>
+  <div *ngIf="error" class="error">{{ error }}</div>
+
+  <ul *ngIf="!loading && !error">
+    <li
+      *ngFor="let repo of filteredRepositories"
+      [class.selected]="selectedRepo && selectedRepo.id === repo.id"
+      (click)="selectRepo(repo)"
+    >
+      {{ repo.name }}
+      <span *ngIf="selectedRepo && selectedRepo.id === repo.id" class="selected-indicator">&#10003;</span>
+    </li>
+  </ul>
+</div>
