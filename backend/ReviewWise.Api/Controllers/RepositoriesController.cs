@@ -12,10 +12,12 @@ namespace ReviewWise.Api.Controllers
     public class RepositoriesController : ControllerBase
     {
         private readonly IHttpClientFactory _httpClientFactory;
+        private readonly ILogger<RepositoriesController> _logger;
 
-        public RepositoriesController(IHttpClientFactory httpClientFactory)
+        public RepositoriesController(IHttpClientFactory httpClientFactory, ILogger<RepositoriesController> logger)
         {
             _httpClientFactory = httpClientFactory;
+            _logger = logger;
         }
 
         [Authorize]
@@ -23,9 +25,14 @@ namespace ReviewWise.Api.Controllers
         public async Task<IActionResult> GetRepositories()
         {
             var provider = User.FindFirstValue(ClaimTypes.AuthenticationMethod) ?? "GitHub";
+            _logger.LogInformation("Fetching repositories for provider {Provider}.", provider);
+
             var accessToken = await HttpContext.GetTokenAsync("access_token");
             if (string.IsNullOrEmpty(accessToken))
+            {
+                _logger.LogWarning("Repository request unauthorized because access token is missing.");
                 return Unauthorized();
+            }
 
             var client = _httpClientFactory.CreateClient();
             string apiUrl;
@@ -39,10 +46,14 @@ namespace ReviewWise.Api.Controllers
 
             var response = await client.GetAsync(apiUrl);
             if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogWarning("Repository fetch failed for provider {Provider} with status {StatusCode}.", provider, (int)response.StatusCode);
                 return StatusCode((int)response.StatusCode, await response.Content.ReadAsStringAsync());
+            }
 
             var json = await response.Content.ReadAsStringAsync();
             var repos = JsonDocument.Parse(json).RootElement;
+            _logger.LogInformation("Fetched {RepositoryCount} repositories for provider {Provider}.", repos.GetArrayLength(), provider);
             return Ok(repos);
         }
 
@@ -51,9 +62,14 @@ namespace ReviewWise.Api.Controllers
         public async Task<IActionResult> GetPullRequests(string owner, string repo)
         {
             var provider = User.FindFirstValue(ClaimTypes.AuthenticationMethod) ?? "GitHub";
+            _logger.LogInformation("Fetching pull requests for {Owner}/{Repo} via provider {Provider}.", owner, repo, provider);
+
             var accessToken = await HttpContext.GetTokenAsync("access_token");
             if (string.IsNullOrEmpty(accessToken))
+            {
+                _logger.LogWarning("Pull request request unauthorized for {Owner}/{Repo} because access token is missing.", owner, repo);
                 return Unauthorized();
+            }
 
             var client = _httpClientFactory.CreateClient();
             string apiUrl;
@@ -67,10 +83,14 @@ namespace ReviewWise.Api.Controllers
 
             var response = await client.GetAsync(apiUrl);
             if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogWarning("Pull request fetch failed for {Owner}/{Repo} via {Provider} with status {StatusCode}.", owner, repo, provider, (int)response.StatusCode);
                 return StatusCode((int)response.StatusCode, await response.Content.ReadAsStringAsync());
+            }
 
             var json = await response.Content.ReadAsStringAsync();
             var prs = JsonDocument.Parse(json).RootElement;
+            _logger.LogInformation("Fetched {PullRequestCount} pull requests for {Owner}/{Repo} via {Provider}.", prs.GetArrayLength(), owner, repo, provider);
             return Ok(prs);
         }
     }
