@@ -24,3 +24,52 @@
   text-decoration: none;
   font-weight: 600;
 }
+
+.recent-reviews-card {
+  margin-top: 1.5rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid;
+
+  h2 {
+    margin: 0 0 0.75rem;
+    font-size: 1.2rem;
+  }
+}
+
+.recent-reviews-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+
+  li {
+    display: grid;
+    gap: 0.2rem;
+    padding: 0.65rem 0.75rem;
+    border: 1px solid;
+    border-radius: 10px;
+  }
+}
+
+.review-title {
+  font-weight: 600;
+}
+
+.review-meta {
+  font-size: 0.88rem;
+  opacity: 0.8;
+}
+
+.review-action {
+  width: fit-content;
+  font-size: 0.9rem;
+}
+
+.muted {
+  opacity: 0.8;
+}
+
+.error {
+  font-weight: 600;
+}

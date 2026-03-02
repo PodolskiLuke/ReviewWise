@@ -51,6 +51,14 @@ test.describe('Core user smoke journey', () => {
 
     await expect(page.getByText('Generated review: looks good overall.')).toBeVisible({ timeout: 15000 });
     await expect(page.getByRole('status').filter({ hasText: 'Review generated and displayed.' })).toBeVisible({ timeout: 15000 });
+
+    await page
+      .getByRole('navigation', { name: 'Authenticated navigation' })
+      .getByRole('link', { name: 'Home', exact: true })
+      .click();
+    await expect(page).toHaveURL(/\/(|home)$/);
+    await expect(page.getByRole('heading', { name: 'Recent reviews' })).toBeVisible();
+    await expect(page.getByText('PodolskiLuke/ReviewWise #101')).toBeVisible();
   });
 
   test('authenticated user can save settings and sees persisted values after reload', async ({ page }) => {

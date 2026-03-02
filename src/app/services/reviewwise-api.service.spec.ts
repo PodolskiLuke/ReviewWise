@@ -69,6 +69,15 @@ describe('ReviewWiseApiService', () => {
     req.flush({ review: 'ok' });
   });
 
+  it('should request recent reviews for authenticated user', () => {
+    service.getRecentReviews().subscribe();
+
+    const req = httpMock.expectOne(`${environment.apiBaseUrl}/api/reviews/recent?limit=5`);
+    expect(req.request.method).toBe('GET');
+    expect(req.request.withCredentials).toBeTrue();
+    req.flush({ reviews: [] });
+  });
+
   it('should trigger review generation for a pull request', () => {
     service.triggerReview('owner1', 'repo1', 123).subscribe();
 
