@@ -119,6 +119,19 @@ If UI seems stuck, DevTools will show exactly which action did not transition to
 - Backend returns `401/403` for unauthorized `/api/*` requests (no OAuth redirect for XHR).
 - Ensure OAuth callback URLs exactly match the configured backend endpoints.
 - Review generation is rate-limited per user/repository/PR (default cooldown: 60 seconds) and may return `429` with retry guidance.
+- Review generation throttle mode is configurable via `ReviewGeneration:ThrottleMode` (`DistributedCache` or `InMemory`).
+
+### Development diagnostics endpoint
+In Development only, use this endpoint to confirm active review throttle settings:
+
+```bash
+GET http://localhost:5010/api/dev/review-generation-config
+```
+
+Response fields:
+- `throttleMode`
+- `cooldownSeconds`
+- `implementation`
 
 ## Common failures (quick fixes)
 
