@@ -9,8 +9,34 @@ const corsHeaders = {
   'Access-Control-Allow-Origin': `http://${FRONTEND_HOST}:${FRONTEND_PORT}`,
   'Access-Control-Allow-Credentials': 'true',
   'Access-Control-Allow-Headers': 'Content-Type',
-  'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+  'Access-Control-Allow-Methods': 'GET,POST,PUT,OPTIONS',
   'Content-Type': 'application/json'
+};
+
+let mockUserSettings = {
+  schemaVersion: 1,
+  profile: {
+    displayName: 'ci-user',
+    timezone: 'Europe/London'
+  },
+  reviewPreferences: {
+    depth: 'standard',
+    focusAreas: ['bugs', 'security', 'quality'],
+    outputLength: 'medium',
+    autoLoadLatestReview: true,
+    autoGenerateWhenMissing: true
+  },
+  repositoryPreferences: {
+    defaultRepository: {
+      owner: 'PodolskiLuke',
+      name: 'ReviewWise'
+    },
+    excludedRepositories: []
+  },
+  uiPreferences: {
+    showCooldownHints: true
+  },
+  updatedAt: null
 };
 
 const sendJson = (res, statusCode, payload) => {
@@ -52,6 +78,39 @@ const apiServer = http.createServer((req, res) => {
       username: 'ci-user',
       reused: false
     });
+    return;
+  }
+
+  if (req.method === 'GET' && req.url === '/api/user-settings') {
+    sendJson(res, 200, { settings: mockUserSettings });
+    return;
+  }
+
+  if (req.method === 'PUT' && req.url === '/api/user-settings') {
+    let rawBody = '';
+    req.on('data', (chunk) => {
+      rawBody += chunk;
+    });
+
+    req.on('end', () => {
+      try {
+        const payload = rawBody ? JSON.parse(rawBody) : {};
+        if (!payload.settings || typeof payload.settings !== 'object') {
+          sendJson(res, 400, { message: 'Settings payload is required.' });
+          return;
+        }
+
+        mockUserSettings = {
+          ...payload.settings,
+          updatedAt: new Date().toISOString()
+        };
+
+        sendJson(res, 200, { settings: mockUserSettings });
+      } catch {
+        sendJson(res, 400, { message: 'Invalid JSON payload.' });
+      }
+    });
+
     return;
   }
 

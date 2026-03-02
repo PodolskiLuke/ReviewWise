@@ -1,0 +1,117 @@
+<section class="settings-card">
+  <h1>User settings</h1>
+
+  @if (loading) {
+    <p class="muted">Loading settings…</p>
+  }
+
+  @if (loadError) {
+    <p class="error" role="alert">{{ loadError }}</p>
+  }
+
+  @if (!loading && !loadError) {
+    <form [formGroup]="form" (ngSubmit)="save()" class="settings-form">
+      <fieldset>
+        <legend>Profile</legend>
+
+        <label>
+          Display name
+          <input type="text" formControlName="displayName" />
+        </label>
+
+        <label>
+          Timezone
+          <input type="text" formControlName="timezone" placeholder="Europe/London" />
+        </label>
+      </fieldset>
+
+      <fieldset>
+        <legend>Review preferences</legend>
+
+        <label>
+          Review depth
+          <select formControlName="depth">
+            <option value="quick">Quick</option>
+            <option value="standard">Standard</option>
+            <option value="deep">Deep</option>
+          </select>
+        </label>
+
+        <label>
+          Output length
+          <select formControlName="outputLength">
+            <option value="short">Short</option>
+            <option value="medium">Medium</option>
+            <option value="long">Long</option>
+          </select>
+        </label>
+
+        <div class="focus-areas">
+          <p>Focus areas</p>
+          @for (area of focusAreaOptions; track area) {
+            <label class="checkbox-row">
+              <input
+                type="checkbox"
+                [checked]="isFocusAreaChecked(area)"
+                (change)="onFocusAreaToggle(area, $any($event.target).checked)"
+              />
+              <span>{{ area }}</span>
+            </label>
+          }
+        </div>
+
+        <label class="checkbox-row">
+          <input type="checkbox" formControlName="autoLoadLatestReview" />
+          <span>Auto-load latest review when PR is selected</span>
+        </label>
+
+        <label class="checkbox-row">
+          <input type="checkbox" formControlName="autoGenerateWhenMissing" />
+          <span>Auto-generate review when no saved review exists</span>
+        </label>
+      </fieldset>
+
+      <fieldset>
+        <legend>Repository defaults</legend>
+
+        <label>
+          Default repository owner
+          <input type="text" formControlName="defaultRepositoryOwner" placeholder="owner" />
+        </label>
+
+        <label>
+          Default repository name
+          <input type="text" formControlName="defaultRepositoryName" placeholder="repo" />
+        </label>
+
+        <label>
+          Excluded repositories (one per line, owner/name)
+          <textarea rows="4" formControlName="excludedRepositoriesText"></textarea>
+        </label>
+      </fieldset>
+
+      <fieldset>
+        <legend>UI</legend>
+
+        <label class="checkbox-row">
+          <input type="checkbox" formControlName="showCooldownHints" />
+          <span>Show cooldown hints in the review panel</span>
+        </label>
+      </fieldset>
+
+      <div class="actions">
+        <button type="submit" [disabled]="saving">
+          {{ saving ? 'Saving…' : 'Save changes' }}
+        </button>
+      </div>
+
+      @if (saveSuccess) {
+        <p class="success" role="status">{{ saveSuccess }}</p>
+      }
+
+      @if (saveError) {
+        <p class="error" role="alert">{{ saveError }}</p>
+      }
+    </form>
+  }
+</section>
