@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using ReviewWise.Api.Data;
+using ReviewWise.Api.Services;
 using Microsoft.AspNetCore.Authentication;
 using System.Security.Claims;
 
@@ -14,6 +15,16 @@ builder.Logging.AddDebug();
 builder.Services.AddOpenApi();
 builder.Services.AddHttpClient();
 builder.Services.AddControllers();
+builder.Services.AddDistributedMemoryCache();
+var throttleMode = builder.Configuration["ReviewGeneration:ThrottleMode"]?.Trim();
+if (string.Equals(throttleMode, "InMemory", StringComparison.OrdinalIgnoreCase))
+{
+    builder.Services.AddSingleton<IReviewGenerationThrottle, InMemoryReviewGenerationThrottle>();
+}
+else
+{
+    builder.Services.AddSingleton<IReviewGenerationThrottle, DistributedCacheReviewGenerationThrottle>();
+}
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("FrontendDevPolicy", policy =>
@@ -105,10 +116,41 @@ builder.Services.AddAuthorization();
 
 var app = builder.Build();
 
+var startupLogger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("Startup");
+var throttleService = app.Services.GetRequiredService<IReviewGenerationThrottle>();
+var resolvedThrottleMode = builder.Configuration["ReviewGeneration:ThrottleMode"]?.Trim();
+if (string.IsNullOrWhiteSpace(resolvedThrottleMode))
+{
+    resolvedThrottleMode = "DistributedCache (default)";
+}
+startupLogger.LogInformation(
+    "Review generation throttle mode configured as '{ThrottleMode}' using implementation {ImplementationType}.",
+    resolvedThrottleMode,
+    throttleService.GetType().Name);
+
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
+
+    app.MapGet("/api/dev/review-generation-config", (HttpContext context, IConfiguration configuration) =>
+    {
+        var throttle = context.RequestServices.GetRequiredService<IReviewGenerationThrottle>();
+        var throttleMode = configuration["ReviewGeneration:ThrottleMode"]?.Trim();
+        if (string.IsNullOrWhiteSpace(throttleMode))
+        {
+            throttleMode = "DistributedCache (default)";
+        }
+
+        var cooldownSeconds = configuration.GetValue<int?>("ReviewGeneration:CooldownSeconds") ?? 60;
+
+        return Results.Ok(new
+        {
+            throttleMode,
+            cooldownSeconds,
+            implementation = throttle.GetType().Name
+        });
+    });
 }
 
 app.UseHttpsRedirection();

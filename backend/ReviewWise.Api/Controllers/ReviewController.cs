@@ -5,7 +5,7 @@ using System.Net.Http.Headers;
 using System.Security.Claims;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
-using System.Collections.Concurrent;
+using ReviewWise.Api.Services;
 
 namespace ReviewWise.Api.Controllers
 {
@@ -13,18 +13,19 @@ namespace ReviewWise.Api.Controllers
     [Route("api/repositories/{owner}/{repo}/pull-requests/{prNumber}/review")]
     public class ReviewController : ControllerBase
     {
-        private static readonly ConcurrentDictionary<string, DateTimeOffset> ReviewGenerationAttempts = new();
         private readonly IHttpClientFactory _httpClientFactory;
         private readonly IConfiguration _config;
         private readonly ReviewWise.Api.Data.AppDbContext _db;
         private readonly ILogger<ReviewController> _logger;
+        private readonly IReviewGenerationThrottle _reviewGenerationThrottle;
 
-        public ReviewController(IHttpClientFactory httpClientFactory, IConfiguration config, ReviewWise.Api.Data.AppDbContext db, ILogger<ReviewController> logger)
+        public ReviewController(IHttpClientFactory httpClientFactory, IConfiguration config, ReviewWise.Api.Data.AppDbContext db, ILogger<ReviewController> logger, IReviewGenerationThrottle reviewGenerationThrottle)
         {
             _httpClientFactory = httpClientFactory;
             _config = config;
             _db = db;
             _logger = logger;
+            _reviewGenerationThrottle = reviewGenerationThrottle;
         }
 
         [Authorize]
@@ -77,23 +78,22 @@ namespace ReviewWise.Api.Controllers
             var now = DateTimeOffset.UtcNow;
             var attemptKey = $"{username}|{owner}|{repo}|{prNumber}";
 
-            if (ReviewGenerationAttempts.TryGetValue(attemptKey, out var lastAttemptAt))
-            {
-                var elapsedSeconds = (now - lastAttemptAt).TotalSeconds;
-                if (elapsedSeconds < cooldownSeconds)
-                {
-                    var retryAfterSeconds = Math.Max(1, cooldownSeconds - (int)Math.Floor(elapsedSeconds));
-                    _logger.LogWarning("Review generation throttled for {Owner}/{Repo} PR #{PrNumber} by {Username}. Retry after {RetryAfterSeconds}s.", owner, repo, prNumber, username, retryAfterSeconds);
-                    Response.Headers.RetryAfter = retryAfterSeconds.ToString();
-                    return StatusCode(StatusCodes.Status429TooManyRequests, new
-                    {
-                        message = $"Review generation was requested too recently. Try again in {retryAfterSeconds} seconds.",
-                        retryAfterSeconds
-                    });
-                }
-            }
+            var throttleDecision = _reviewGenerationThrottle.CheckAndTrack(
+                attemptKey,
+                TimeSpan.FromSeconds(cooldownSeconds),
+                now);
 
-            ReviewGenerationAttempts[attemptKey] = now;
+            if (!throttleDecision.IsAllowed)
+            {
+                var retryAfterSeconds = throttleDecision.RetryAfterSeconds ?? cooldownSeconds;
+                _logger.LogWarning("Review generation throttled for {Owner}/{Repo} PR #{PrNumber} by {Username}. Retry after {RetryAfterSeconds}s.", owner, repo, prNumber, username, retryAfterSeconds);
+                Response.Headers.RetryAfter = retryAfterSeconds.ToString();
+                return StatusCode(StatusCodes.Status429TooManyRequests, new
+                {
+                    message = $"Review generation was requested too recently. Try again in {retryAfterSeconds} seconds.",
+                    retryAfterSeconds
+                });
+            }
 
             var accessToken = await HttpContext.GetTokenAsync("access_token");
             if (string.IsNullOrEmpty(accessToken))
