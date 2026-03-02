@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, DestroyRef, ElementRef, OnInit, ViewChild, inject } from '@angular/core';
+import { ChangeDetectorRef, Component, DestroyRef, ElementRef, OnInit, ViewChild, inject } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { Store } from '@ngrx/store';
@@ -50,7 +50,7 @@ export class RepositoriesListComponent implements OnInit {
   error: string | null = null;
   private retryCountdownIntervalId: ReturnType<typeof setInterval> | null = null;
 
-  constructor(private store: Store) {
+  constructor(private store: Store, private changeDetectorRef: ChangeDetectorRef) {
     this.destroyRef.onDestroy(() => this.clearRetryCountdownInterval());
   }
 
@@ -135,78 +135,91 @@ export class RepositoriesListComponent implements OnInit {
       .subscribe((repositories) => {
         this.repositories = repositories;
         this.applySearchFilter();
+        this.syncView();
       });
 
     this.store.select(selectRepositoriesLoading)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((loading) => {
         this.loading = loading;
+        this.syncView();
       });
 
     this.store.select(selectRepositoriesError)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((error) => {
         this.error = error;
+        this.syncView();
       });
 
     this.store.select(selectSelectedRepository)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((repository) => {
         this.selectedRepo = repository;
+        this.syncView();
       });
 
     this.store.select(selectSelectedPullRequest)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((pullRequest) => {
         this.selectedPullRequest = pullRequest;
+        this.syncView();
       });
 
     this.store.select(selectPullRequests)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((pullRequests) => {
         this.pullRequests = pullRequests;
+        this.syncView();
       });
 
     this.store.select(selectPullRequestsError)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((error) => {
         this.pullRequestsError = error;
+        this.syncView();
       });
 
     this.store.select(selectPullRequestsLoading)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((loading) => {
         this.pullRequestsLoading = loading;
+        this.syncView();
       });
 
     this.store.select(selectReviewLoading)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((loading) => {
         this.reviewLoading = loading;
+        this.syncView();
       });
 
     this.store.select(selectReviewError)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((error) => {
         this.reviewError = error;
+        this.syncView();
       });
 
     this.store.select(selectReviewText)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((reviewText) => {
         this.reviewText = reviewText;
+        this.syncView();
       });
 
     this.store.select(selectReviewMeta)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((reviewMeta) => {
         this.reviewMeta = reviewMeta;
+        this.syncView();
       });
 
     this.store.select(selectReviewStatusMessage)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((statusMessage) => {
         this.reviewStatusMessage = statusMessage;
+        this.syncView();
       });
 
     this.store.select(selectReviewRetryAfterSeconds)
@@ -214,7 +227,12 @@ export class RepositoriesListComponent implements OnInit {
       .subscribe((retryAfterSeconds) => {
         this.reviewRetryAfterSeconds = retryAfterSeconds;
         this.handleRetryAfterSeconds(retryAfterSeconds);
+        this.syncView();
       });
+  }
+
+  private syncView() {
+    this.changeDetectorRef.detectChanges();
   }
 
   private handleRetryAfterSeconds(retryAfterSeconds: number | null) {
