@@ -6,6 +6,7 @@ import {
 } from '@angular/common/http/testing';
 import { ReviewWiseApiService } from './reviewwise-api.service';
 import { environment } from '../../environments/environment';
+import { UserSettingsDocument } from '../models/user-settings.models';
 
 describe('ReviewWiseApiService', () => {
   let service: ReviewWiseApiService;
@@ -78,5 +79,50 @@ describe('ReviewWiseApiService', () => {
     expect(req.request.withCredentials).toBeTrue();
     expect(req.request.body).toEqual({});
     req.flush({ review: 'generated' });
+  });
+
+  it('should request user settings', () => {
+    service.getUserSettings().subscribe();
+
+    const req = httpMock.expectOne(`${environment.apiBaseUrl}/api/user-settings`);
+    expect(req.request.method).toBe('GET');
+    expect(req.request.withCredentials).toBeTrue();
+    req.flush({ settings: { schemaVersion: 1 } });
+  });
+
+  it('should update user settings', () => {
+    const settings: UserSettingsDocument = {
+      schemaVersion: 1,
+      profile: {
+        displayName: 'ci-user',
+        timezone: 'Europe/London'
+      },
+      reviewPreferences: {
+        depth: 'standard',
+        focusAreas: ['bugs', 'security', 'quality'],
+        outputLength: 'medium',
+        autoLoadLatestReview: true,
+        autoGenerateWhenMissing: true
+      },
+      repositoryPreferences: {
+        defaultRepository: {
+          owner: 'PodolskiLuke',
+          name: 'ReviewWise'
+        },
+        excludedRepositories: []
+      },
+      uiPreferences: {
+        showCooldownHints: true
+      },
+      updatedAt: null
+    };
+
+    service.updateUserSettings(settings).subscribe();
+
+    const req = httpMock.expectOne(`${environment.apiBaseUrl}/api/user-settings`);
+    expect(req.request.method).toBe('PUT');
+    expect(req.request.withCredentials).toBeTrue();
+    expect(req.request.body).toEqual({ settings });
+    req.flush({ settings });
   });
 });
