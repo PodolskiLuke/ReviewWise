@@ -3,4 +3,32 @@
   <p>You are signed in. Continue to your repositories workspace when you are ready.</p>
 
   <a routerLink="/repositories" class="view-repositories-btn">View repositories</a>
+
+  <section class="recent-reviews-card" aria-label="Recent reviews">
+    <h2>Recent reviews</h2>
+
+    @if (loadingRecentReviews()) {
+      <p class="muted">Loading recent reviews…</p>
+    }
+
+    @if (recentReviewsError()) {
+      <p class="error" role="alert">{{ recentReviewsError() }}</p>
+    }
+
+    @if (!loadingRecentReviews() && !recentReviewsError() && !hasRecentReviews()) {
+      <p class="muted">No reviews yet. Generate your first review.</p>
+    }
+
+    @if (!loadingRecentReviews() && hasRecentReviews()) {
+      <ul class="recent-reviews-list">
+        @for (review of recentReviews(); track review.owner + '/' + review.repo + '#' + review.prNumber + ':' + review.createdAt) {
+          <li>
+            <span class="review-title">{{ review.owner }}/{{ review.repo }} #{{ review.prNumber }}</span>
+            <span class="review-meta">{{ review.createdAt | date: 'medium' }}</span>
+            <a routerLink="/repositories" class="review-action">Open in Repositories</a>
+          </li>
+        }
+      </ul>
+    }
+  </section>
 </section>

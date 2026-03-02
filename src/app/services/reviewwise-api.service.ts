@@ -3,6 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { environment } from '../../environments/environment';
 import { Observable } from 'rxjs';
 import { UpdateUserSettingsRequest, UserSettingsDocument, UserSettingsResponse } from '../models/user-settings.models';
+import { RecentReviewsResponse } from '../models/recent-reviews.models';
 
 @Injectable({ providedIn: 'root' })
 export class ReviewWiseApiService {
@@ -24,6 +25,10 @@ export class ReviewWiseApiService {
 
   getReviewResult(owner: string, repo: string, prNumber: number): Observable<any> {
     return this.http.get(`${this.api}/api/repositories/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pull-requests/${prNumber}/review`, { withCredentials: true });
+  }
+
+  getRecentReviews(limit = 5): Observable<RecentReviewsResponse> {
+    return this.http.get<RecentReviewsResponse>(`${this.api}/api/reviews/recent?limit=${limit}`, { withCredentials: true });
   }
 
   triggerReview(owner: string, repo: string, prNumber: number): Observable<any> {

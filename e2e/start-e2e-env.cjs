@@ -39,6 +39,8 @@ let mockUserSettings = {
   updatedAt: null
 };
 
+let mockRecentReviews = [];
+
 const sendJson = (res, statusCode, payload) => {
   res.writeHead(statusCode, corsHeaders);
   res.end(JSON.stringify(payload));
@@ -72,12 +74,32 @@ const apiServer = http.createServer((req, res) => {
   }
 
   if (req.method === 'POST' && req.url === '/api/repositories/PodolskiLuke/ReviewWise/pull-requests/101/review') {
+    const createdAt = new Date().toISOString();
+    mockRecentReviews = [
+      {
+        owner: 'PodolskiLuke',
+        repo: 'ReviewWise',
+        prNumber: 101,
+        createdAt,
+        username: 'ci-user'
+      },
+      ...mockRecentReviews.filter((review) => !(review.owner === 'PodolskiLuke' && review.repo === 'ReviewWise' && review.prNumber === 101))
+    ];
+
     sendJson(res, 200, {
       review: 'Generated review: looks good overall.',
-      createdAt: new Date().toISOString(),
+      createdAt,
       username: 'ci-user',
       reused: false
     });
+    return;
+  }
+
+  if (req.method === 'GET' && req.url.startsWith('/api/reviews/recent')) {
+    const requestUrl = new URL(req.url, `http://${FRONTEND_HOST}:${API_PORT}`);
+    const requestedLimit = Number(requestUrl.searchParams.get('limit') ?? '5');
+    const limit = Number.isFinite(requestedLimit) && requestedLimit > 0 ? requestedLimit : 5;
+    sendJson(res, 200, { reviews: mockRecentReviews.slice(0, limit) });
     return;
   }
 
