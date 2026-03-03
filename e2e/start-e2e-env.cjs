@@ -69,7 +69,7 @@ const apiServer = http.createServer((req, res) => {
   }
 
   if (req.method === 'GET' && req.url === '/api/repositories/PodolskiLuke/ReviewWise/pull-requests/101/review') {
-    sendJson(res, 404, { message: 'No review result found for this PR.' });
+    sendJson(res, 200, { review: null, createdAt: null, username: null });
     return;
   }
 

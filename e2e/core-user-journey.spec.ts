@@ -17,6 +17,8 @@ test.describe('Core user smoke journey', () => {
   });
 
   test('authenticated flow loads repositories, selects PR, and generates review', async ({ page }) => {
+    let recentReviews: Array<{ owner: string; repo: string; prNumber: number; createdAt: string; username: string }> = [];
+
     await page.route('**/api/auth/users', async (route) => {
       await route.fulfill({
         status: 200,
@@ -26,6 +28,68 @@ test.describe('Core user smoke journey', () => {
           username: 'ci-user',
           provider: 'GitHub'
         })
+      });
+    });
+
+    await page.route('**/api/repositories', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([{ id: 1, name: 'ReviewWise', owner: { login: 'PodolskiLuke' } }])
+      });
+    });
+
+    await page.route('**/api/repositories/PodolskiLuke/ReviewWise/pull-requests', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([{ number: 101, title: 'Add e2e smoke test' }])
+      });
+    });
+
+    await page.route('**/api/repositories/PodolskiLuke/ReviewWise/pull-requests/101/review', async (route) => {
+      const method = route.request().method();
+
+      if (method === 'GET') {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ review: null, createdAt: null, username: null })
+        });
+        return;
+      }
+
+      if (method === 'POST') {
+        const createdAt = new Date().toISOString();
+        recentReviews = [{
+          owner: 'PodolskiLuke',
+          repo: 'ReviewWise',
+          prNumber: 101,
+          createdAt,
+          username: 'ci-user'
+        }];
+
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            review: 'Generated review: looks good overall.',
+            createdAt,
+            username: 'ci-user',
+            reused: false
+          })
+        });
+        return;
+      }
+
+      await route.continue();
+    });
+
+    await page.route('**/api/reviews/recent?limit=5', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ reviews: recentReviews })
       });
     });
 
@@ -48,6 +112,7 @@ test.describe('Core user smoke journey', () => {
     await expect(pullRequestOption).toBeVisible();
 
     await pullRequestOption.click();
+    await page.getByRole('button', { name: 'Generate review' }).click();
 
     await expect(page.getByText('Generated review: looks good overall.')).toBeVisible({ timeout: 15000 });
     await expect(page.getByRole('status').filter({ hasText: 'Review generated and displayed.' })).toBeVisible({ timeout: 15000 });
