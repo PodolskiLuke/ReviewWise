@@ -142,4 +142,50 @@ describe('RepositoriesListComponent', () => {
     expect(component.generateButtonLabel).toBe('Try again in 7s');
     expect(component.isGenerateButtonDisabled).toBeTrue();
   });
+
+  it('should sort pull requests by created date and paginate rows', () => {
+    component.pullRequests = [
+      { number: 1, title: 'A', createdAt: '2026-03-01T10:00:00Z' },
+      { number: 2, title: 'B', createdAt: '2026-03-02T10:00:00Z' },
+      { number: 3, title: 'C', createdAt: '2026-03-03T10:00:00Z' },
+      { number: 4, title: 'D', createdAt: '2026-03-04T10:00:00Z' },
+      { number: 5, title: 'E', createdAt: '2026-03-05T10:00:00Z' },
+      { number: 6, title: 'F', createdAt: '2026-03-06T10:00:00Z' },
+      { number: 7, title: 'G', createdAt: '2026-03-07T10:00:00Z' },
+      { number: 8, title: 'H', createdAt: '2026-03-08T10:00:00Z' },
+      { number: 9, title: 'I', createdAt: '2026-03-09T10:00:00Z' },
+      { number: 10, title: 'J', createdAt: '2026-03-10T10:00:00Z' },
+      { number: 11, title: 'K', createdAt: '2026-03-11T10:00:00Z' },
+    ];
+
+    component.prSortColumn = 'created';
+    component.prSortDirection = 'desc';
+
+    expect(component.hasPullRequestPagination).toBeTrue();
+    expect(component.totalPullRequestPages).toBe(2);
+    expect(component.visiblePullRequests.length).toBe(10);
+    expect(component.visiblePullRequests[0].number).toBe(11);
+
+    component.goToNextPullRequestPage();
+
+    expect(component.currentPullRequestPage).toBe(2);
+    expect(component.visiblePullRequests.length).toBe(1);
+    expect(component.visiblePullRequests[0].number).toBe(1);
+  });
+
+  it('should reset to first page when changing pull request page size', () => {
+    component.pullRequests = Array.from({ length: 12 }).map((_, index) => ({
+      number: index + 1,
+      title: `PR ${index + 1}`,
+      createdAt: `2026-03-${String(index + 1).padStart(2, '0')}T10:00:00Z`
+    }));
+    component.currentPullRequestPage = 2;
+
+    component.onPullRequestPageSizeChange('5');
+
+    expect(component.pullRequestsPageSize).toBe(5);
+    expect(component.currentPullRequestPage).toBe(1);
+    expect(component.totalPullRequestPages).toBe(3);
+    expect(component.visiblePullRequests.length).toBe(5);
+  });
 });

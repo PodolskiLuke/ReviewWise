@@ -1,15 +1,39 @@
 .settings-card {
-  max-width: 760px;
-  margin: 1rem auto;
-  padding: 1.5rem;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  background: #ffffff;
+  max-width: 840px;
+  margin: 1.2rem auto;
+  padding: 1.6rem;
+  border: 1px solid #c7d2fe;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8faff 100%);
+  box-shadow: 0 18px 38px rgba(15, 23, 42, 0.08);
 }
 
 h1 {
   margin-top: 0;
+  margin-bottom: 0.2rem;
+  color: #0f172a;
+}
+
+.settings-header {
+  display: flex;
+  align-items: center;
+  gap: 0.95rem;
   margin-bottom: 1rem;
+}
+
+.settings-logo {
+  width: 58px;
+  height: 58px;
+  object-fit: cover;
+  border-radius: 12px;
+  border: 1px solid #cbd5e1;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.14);
+}
+
+.settings-subtitle {
+  margin: 0;
+  color: #475569;
+  font-size: 0.95rem;
 }
 
 .settings-form {
@@ -18,8 +42,9 @@ h1 {
 }
 
 fieldset {
-  border: 1px solid #e5e7eb;
-  border-radius: 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  background: #ffffff;
   padding: 0.9rem;
   display: grid;
   gap: 0.75rem;
@@ -28,21 +53,32 @@ fieldset {
 legend {
   font-weight: 600;
   padding: 0 0.35rem;
+  color: #1e3a8a;
 }
 
 label {
   display: grid;
   gap: 0.35rem;
   font-size: 0.95rem;
+  color: #0f172a;
 }
 
 input,
 select,
 textarea {
-  border: 1px solid #d1d5db;
+  border: 1px solid #94a3b8;
   border-radius: 8px;
   padding: 0.55rem 0.65rem;
   font: inherit;
+  background: #ffffff;
+}
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+button:focus-visible {
+  outline: 3px solid #2563eb;
+  outline-offset: 2px;
 }
 
 textarea {
@@ -68,6 +104,7 @@ textarea {
 .focus-areas p {
   margin: 0;
   font-weight: 600;
+  color: #1e3a8a;
 }
 
 .actions {
@@ -76,13 +113,19 @@ textarea {
 }
 
 button {
-  border: 1px solid #2563eb;
+  border: 1px solid #1e3a8a;
   border-radius: 8px;
-  background: #2563eb;
+  background: #1e3a8a;
   color: #fff;
   padding: 0.55rem 1rem;
   font-weight: 600;
   cursor: pointer;
+  transition: transform 0.2s ease, background-color 0.2s ease;
+}
+
+button:hover:enabled {
+  transform: translateY(-1px);
+  background: #1e40af;
 }
 
 button[disabled] {
@@ -93,13 +136,31 @@ button[disabled] {
 .success {
   color: #166534;
   margin: 0;
+  font-weight: 600;
 }
 
 .error {
   color: #b91c1c;
   margin: 0;
+  font-weight: 600;
 }
 
 .muted {
-  color: #6b7280;
+  color: #64748b;
+}
+
+@media (max-width: 640px) {
+  .settings-card {
+    padding: 1rem;
+    border-radius: 14px;
+  }
+
+  .settings-header {
+    align-items: flex-start;
+  }
+
+  .settings-logo {
+    width: 52px;
+    height: 52px;
+  }
 }

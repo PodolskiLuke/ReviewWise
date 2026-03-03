@@ -54,21 +54,70 @@
     }
 
     @if (!pullRequestsLoading && !pullRequestsError && pullRequests.length > 0) {
-      <ul class="pr-list" role="listbox" aria-label="Pull requests">
-        @for (pr of pullRequests; track getPrTrackKey(pr)) {
-          <li
-            [class.selected]="isPrSelected(pr)"
-            [attr.aria-selected]="isPrSelected(pr)"
-            role="option"
-            tabindex="0"
-            (click)="selectPullRequest(pr)"
-            (keydown.enter)="selectPullRequest(pr)"
-            (keydown.space)="selectPullRequest(pr); $event.preventDefault()"
-          >
-            {{ getPrLabel(pr) }}
-          </li>
+      <section class="pr-options" aria-label="Pull request options">
+        <div class="pr-options-header">
+          <span>Pull requests</span>
+          <div class="pr-options-header-controls">
+            <span>{{ pullRequests.length }} option(s)</span>
+            <label class="page-size-label">
+              <span>Rows</span>
+              <select
+                [ngModel]="pullRequestsPageSize"
+                (ngModelChange)="onPullRequestPageSizeChange($event)"
+                aria-label="Rows per page"
+              >
+                @for (pageSize of pullRequestPageSizeOptions; track pageSize) {
+                  <option [value]="pageSize">{{ pageSize }}</option>
+                }
+              </select>
+            </label>
+          </div>
+        </div>
+
+        <div class="pr-column-header" aria-hidden="true">
+          <button type="button" class="sort-header" (click)="sortPullRequestsBy('number')" aria-label="Sort by pull request number">
+            PR <span class="sort-indicator">{{ getPullRequestSortIndicator('number') }}</span>
+          </button>
+          <button type="button" class="sort-header" (click)="sortPullRequestsBy('title')" aria-label="Sort by title">
+            Title <span class="sort-indicator">{{ getPullRequestSortIndicator('title') }}</span>
+          </button>
+          <button type="button" class="sort-header sort-header-right" (click)="sortPullRequestsBy('created')" aria-label="Sort by created date">
+            Created <span class="sort-indicator">{{ getPullRequestSortIndicator('created') }}</span>
+          </button>
+        </div>
+
+        <ul class="pr-list" role="listbox" aria-label="Pull requests">
+          @for (pr of visiblePullRequests; track getPrTrackKey(pr)) {
+            <li
+              [class.selected]="isPrSelected(pr)"
+              [attr.aria-selected]="isPrSelected(pr)"
+              role="option"
+              tabindex="0"
+              (click)="selectPullRequest(pr)"
+              (keydown.enter)="selectPullRequest(pr)"
+              (keydown.space)="selectPullRequest(pr); $event.preventDefault()"
+            >
+              <span class="pr-badge">#{{ pr.number ?? pr.iid ?? '?' }}</span>
+              <span class="pr-title">{{ pr.title ?? getPrLabel(pr) }}</span>
+              <span class="pr-created">{{ getPrCreatedLabel(pr) }}</span>
+            </li>
+          }
+        </ul>
+
+        @if (hasPullRequestPagination) {
+          <div class="pagination-row" aria-label="Pull request pagination controls">
+            <button type="button" class="secondary-btn" (click)="goToPreviousPullRequestPage()" [disabled]="currentPullRequestPage === 1">
+              Previous
+            </button>
+
+            <span class="pagination-status">Page {{ currentPullRequestPage }} of {{ totalPullRequestPages }}</span>
+
+            <button type="button" class="secondary-btn" (click)="goToNextPullRequestPage()" [disabled]="currentPullRequestPage === totalPullRequestPages">
+              Next
+            </button>
+          </div>
         }
-      </ul>
+      </section>
       <p class="keyboard-hint">Keyboard: use Enter or Space to select a pull request.</p>
     }
 

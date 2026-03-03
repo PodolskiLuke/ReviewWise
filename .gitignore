@@ -50,6 +50,8 @@ test-results/
 
 # Local databases
 *.db
+*.db-shm
+*.db-wal
 
 # System files
 .DS_Store

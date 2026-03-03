@@ -35,6 +35,11 @@ export class RepositoriesListComponent implements OnInit {
   filteredRepositories: any[] = [];
   selectedRepo: any = null;
   pullRequests: any[] = [];
+  prSortColumn: 'number' | 'title' | 'created' = 'created';
+  prSortDirection: 'asc' | 'desc' = 'desc';
+  currentPullRequestPage = 1;
+  readonly pullRequestPageSizeOptions = [5, 10, 20];
+  pullRequestsPageSize = 10;
   pullRequestsLoading = false;
   pullRequestsError: string | null = null;
   selectedPullRequest: any = null;
@@ -68,6 +73,7 @@ export class RepositoriesListComponent implements OnInit {
     this.selectedRepo = repo;
     this.selectedPullRequest = null;
     this.pullRequests = [];
+    this.currentPullRequestPage = 1;
     this.pullRequestsLoading = false;
     this.pullRequestsError = null;
     this.reviewError = null;
@@ -170,6 +176,7 @@ export class RepositoriesListComponent implements OnInit {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((pullRequests) => {
         this.pullRequests = pullRequests;
+        this.currentPullRequestPage = 1;
         this.syncView();
       });
 
@@ -302,6 +309,83 @@ export class RepositoriesListComponent implements OnInit {
     return number ?? pr?.id ?? pr?.iid ?? pr?.title ?? 'unknown-pr';
   }
 
+  getPrCreatedLabel(pr: any): string {
+    const rawValue = pr?.createdAt ?? pr?.created_at;
+    if (!rawValue) {
+      return '—';
+    }
+
+    const parsedDate = new Date(rawValue);
+    if (Number.isNaN(parsedDate.getTime())) {
+      return '—';
+    }
+
+    return parsedDate.toLocaleDateString(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
+  }
+
+  sortPullRequestsBy(column: 'number' | 'title' | 'created') {
+    if (this.prSortColumn === column) {
+      this.prSortDirection = this.prSortDirection === 'asc' ? 'desc' : 'asc';
+    } else {
+      this.prSortColumn = column;
+      this.prSortDirection = column === 'title' ? 'asc' : 'desc';
+    }
+
+    this.currentPullRequestPage = 1;
+  }
+
+  getPullRequestSortIndicator(column: 'number' | 'title' | 'created'): string {
+    if (this.prSortColumn !== column) {
+      return '';
+    }
+
+    return this.prSortDirection === 'asc' ? '▲' : '▼';
+  }
+
+  get visiblePullRequests(): any[] {
+    const sortedPullRequests = this.getSortedPullRequests();
+    const pageStartIndex = (this.currentPullRequestPage - 1) * this.pullRequestsPageSize;
+    return sortedPullRequests.slice(pageStartIndex, pageStartIndex + this.pullRequestsPageSize);
+  }
+
+  get totalPullRequestPages(): number {
+    return Math.max(1, Math.ceil(this.pullRequests.length / this.pullRequestsPageSize));
+  }
+
+  get hasPullRequestPagination(): boolean {
+    return this.pullRequests.length > this.pullRequestsPageSize;
+  }
+
+  goToPreviousPullRequestPage() {
+    if (this.currentPullRequestPage <= 1) {
+      return;
+    }
+
+    this.currentPullRequestPage -= 1;
+  }
+
+  goToNextPullRequestPage() {
+    if (this.currentPullRequestPage >= this.totalPullRequestPages) {
+      return;
+    }
+
+    this.currentPullRequestPage += 1;
+  }
+
+  onPullRequestPageSizeChange(rawValue: string) {
+    const parsedPageSize = Number(rawValue);
+    if (!this.pullRequestPageSizeOptions.includes(parsedPageSize)) {
+      return;
+    }
+
+    this.pullRequestsPageSize = parsedPageSize;
+    this.currentPullRequestPage = 1;
+  }
+
   isRepoSelected(repo: any): boolean {
     return !!this.selectedRepo && this.getRepoTrackKey(this.selectedRepo) === this.getRepoTrackKey(repo);
   }
@@ -346,6 +430,38 @@ export class RepositoriesListComponent implements OnInit {
     }
 
     return null;
+  }
+
+  private getSortedPullRequests(): any[] {
+    const sortDirectionMultiplier = this.prSortDirection === 'asc' ? 1 : -1;
+
+    return [...this.pullRequests].sort((leftPullRequest, rightPullRequest) => {
+      if (this.prSortColumn === 'number') {
+        const leftNumber = this.getPrNumber(leftPullRequest) ?? Number.MIN_SAFE_INTEGER;
+        const rightNumber = this.getPrNumber(rightPullRequest) ?? Number.MIN_SAFE_INTEGER;
+        return (leftNumber - rightNumber) * sortDirectionMultiplier;
+      }
+
+      if (this.prSortColumn === 'title') {
+        const leftTitle = (leftPullRequest?.title ?? '').toString();
+        const rightTitle = (rightPullRequest?.title ?? '').toString();
+        return leftTitle.localeCompare(rightTitle, undefined, { sensitivity: 'base' }) * sortDirectionMultiplier;
+      }
+
+      const leftCreatedAt = this.getPrCreatedTimestamp(leftPullRequest);
+      const rightCreatedAt = this.getPrCreatedTimestamp(rightPullRequest);
+      return (leftCreatedAt - rightCreatedAt) * sortDirectionMultiplier;
+    });
+  }
+
+  private getPrCreatedTimestamp(pr: any): number {
+    const rawValue = pr?.createdAt ?? pr?.created_at;
+    if (!rawValue) {
+      return 0;
+    }
+
+    const parsedDate = new Date(rawValue);
+    return Number.isNaN(parsedDate.getTime()) ? 0 : parsedDate.getTime();
   }
 
   private focusReviewPanel() {
