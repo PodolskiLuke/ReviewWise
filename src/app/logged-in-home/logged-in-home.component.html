@@ -1,8 +1,16 @@
 <section class="logged-in-home-card">
-  <h1>Welcome back</h1>
-  <p>You are signed in. Continue to your repositories workspace when you are ready.</p>
+  <header class="home-hero">
+    <img src="/logo.jpeg" alt="ReviewWise logo" class="home-logo" />
 
-  <a routerLink="/repositories" class="view-repositories-btn">View repositories</a>
+    <div class="hero-copy">
+      <h1>Welcome back</h1>
+      <p>You are signed in. Continue to your repositories workspace when you are ready.</p>
+    </div>
+  </header>
+
+  <div class="primary-action-row">
+    <a routerLink="/repositories" class="view-repositories-btn">View repositories</a>
+  </div>
 
   <section class="recent-reviews-card" aria-label="Recent reviews">
     <h2>Recent reviews</h2>

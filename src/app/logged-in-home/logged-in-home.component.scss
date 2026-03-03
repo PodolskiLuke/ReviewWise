@@ -1,38 +1,75 @@
 .logged-in-home-card {
-  max-width: 720px;
+  max-width: 840px;
   margin: 2rem auto;
   padding: 2rem;
-  border: 1px solid;
-  border-radius: 16px;
+  border: 1px solid #c7d2fe;
+  border-radius: 20px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8faff 100%);
+  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.08);
 
   h1 {
     margin: 0 0 0.75rem;
-    font-size: 1.75rem;
+    font-size: 2rem;
+    color: #0f172a;
   }
 
   p {
     margin: 0 0 1.5rem;
     line-height: 1.5;
+    color: #334155;
   }
+}
+
+.home-hero {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.5rem 0 0.5rem;
+}
+
+.home-logo {
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: 12px;
+  border: 1px solid #cbd5e1;
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.14);
+}
+
+.hero-copy {
+  flex: 1;
+}
+
+.primary-action-row {
+  margin: 0.5rem 0 1.25rem;
 }
 
 .view-repositories-btn {
   display: inline-block;
-  padding: 0.75rem 1.25rem;
-  border-radius: 10px;
-  border: 1px solid;
+  padding: 0.75rem 1.35rem;
+  border-radius: 12px;
+  border: 1px solid #1e3a8a;
+  background: #1e3a8a;
+  color: #ffffff;
   text-decoration: none;
   font-weight: 600;
+  transition: transform 0.2s ease, background-color 0.2s ease;
+}
+
+.view-repositories-btn:hover {
+  transform: translateY(-1px);
+  background: #1e40af;
 }
 
 .recent-reviews-card {
-  margin-top: 1.5rem;
+  margin-top: 1rem;
   padding-top: 1.25rem;
-  border-top: 1px solid;
+  border-top: 1px solid #dbeafe;
 
   h2 {
     margin: 0 0 0.75rem;
     font-size: 1.2rem;
+    color: #172554;
   }
 }
 
@@ -45,31 +82,59 @@
 
   li {
     display: grid;
-    gap: 0.2rem;
-    padding: 0.65rem 0.75rem;
-    border: 1px solid;
-    border-radius: 10px;
+    gap: 0.25rem;
+    padding: 0.8rem 0.9rem;
+    border: 1px solid #cbd5e1;
+    background: #ffffff;
+    border-radius: 12px;
   }
 }
 
 .review-title {
   font-weight: 600;
+  color: #0f172a;
 }
 
 .review-meta {
   font-size: 0.88rem;
-  opacity: 0.8;
+  color: #475569;
 }
 
 .review-action {
   width: fit-content;
   font-size: 0.9rem;
+  color: #1d4ed8;
+  text-decoration: none;
+}
+
+.review-action:hover {
+  text-decoration: underline;
 }
 
 .muted {
-  opacity: 0.8;
+  color: #64748b;
 }
 
 .error {
   font-weight: 600;
+  color: #991b1b;
+}
+
+@media (max-width: 640px) {
+  .logged-in-home-card {
+    padding: 1.2rem;
+  }
+
+  .home-hero {
+    align-items: flex-start;
+  }
+
+  .home-logo {
+    width: 56px;
+    height: 56px;
+  }
+
+  .logged-in-home-card h1 {
+    font-size: 1.65rem;
+  }
 }
