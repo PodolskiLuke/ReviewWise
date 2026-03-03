@@ -80,8 +80,8 @@ describe('ReviewDataEffects', () => {
     expect((result as ReturnType<typeof ReviewDataActions.loadLatestReviewSuccess>).reviewStatusMessage).toBe('Latest review loaded and displayed.');
   });
 
-  it('should emit generateReview when latest review is missing', async () => {
-    apiServiceSpy.getReviewResult.and.returnValue(throwError(() => ({ status: 404 })));
+  it('should emit empty latest-review success when latest review is missing', async () => {
+    apiServiceSpy.getReviewResult.and.returnValue(of({ review: null }));
 
     const resultPromise = firstValueFrom(effects.loadLatestReview$);
     actions$.next(ReviewDataActions.loadLatestReview({ owner: 'owner1', repo: 'repo1', prNumber: 9 }));
@@ -89,7 +89,11 @@ describe('ReviewDataEffects', () => {
     const result = await resultPromise;
 
     expect(result).toEqual(
-      ReviewDataActions.generateReview({ owner: 'owner1', repo: 'repo1', prNumber: 9 })
+      ReviewDataActions.loadLatestReviewSuccess({
+        reviewText: null,
+        reviewMeta: null,
+        reviewStatusMessage: 'No saved review yet. Click Generate review to create one.'
+      })
     );
   });
 
@@ -167,6 +171,25 @@ describe('ReviewDataEffects', () => {
         error: 'Review generation is rate-limited. Try again in 18 seconds.',
         reviewStatusMessage: 'Review generation is rate-limited. Try again in 18 seconds.',
         retryAfterSeconds: 18
+      })
+    );
+  });
+
+  it('should emit generateReviewFailure with backend message when provider returns a specific error', async () => {
+    apiServiceSpy.triggerReview.and.returnValue(throwError(() => new HttpErrorResponse({
+      status: 502,
+      error: { message: "Configured OpenAI model 'gpt-4' is not available for this API key." }
+    })));
+
+    const resultPromise = firstValueFrom(effects.generateReview$);
+    actions$.next(ReviewDataActions.generateReview({ owner: 'owner1', repo: 'repo1', prNumber: 17 }));
+
+    const result = await resultPromise;
+
+    expect(result).toEqual(
+      ReviewDataActions.generateReviewFailure({
+        error: "Configured OpenAI model 'gpt-4' is not available for this API key.",
+        reviewStatusMessage: 'Review generation failed.'
       })
     );
   });

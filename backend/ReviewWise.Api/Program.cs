@@ -117,6 +117,12 @@ builder.Services.AddAuthorization();
 var app = builder.Build();
 
 var startupLogger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("Startup");
+using (var startupScope = app.Services.CreateScope())
+{
+    var dbContext = startupScope.ServiceProvider.GetRequiredService<AppDbContext>();
+    dbContext.Database.Migrate();
+}
+
 var throttleService = app.Services.GetRequiredService<IReviewGenerationThrottle>();
 var resolvedThrottleMode = builder.Configuration["ReviewGeneration:ThrottleMode"]?.Trim();
 if (string.IsNullOrWhiteSpace(resolvedThrottleMode))

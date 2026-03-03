@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Net;
 using System.Net.Http.Headers;
 using System.Security.Claims;
 using System.Text.Json;
@@ -41,8 +42,13 @@ namespace ReviewWise.Api.Controllers
 
             if (review == null)
             {
-                _logger.LogInformation("No stored review found for {Owner}/{Repo} PR #{PrNumber}.", owner, repo, prNumber);
-                return NotFound(new { message = "No review result found for this PR." });
+                _logger.LogInformation("No stored review found for {Owner}/{Repo} PR #{PrNumber}; returning empty review payload.", owner, repo, prNumber);
+                return Ok(new
+                {
+                    review = (string?)null,
+                    createdAt = (DateTime?)null,
+                    username = (string?)null
+                });
             }
 
             _logger.LogInformation("Returning stored review for {Owner}/{Repo} PR #{PrNumber} created at {CreatedAt} by {Username}.", owner, repo, prNumber, review.CreatedAt, review.Username);
@@ -161,10 +167,16 @@ namespace ReviewWise.Api.Controllers
 
             var openAiClient = _httpClientFactory.CreateClient();
             openAiClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", openAiKey);
+            var openAiModel = _config["OpenAI:Model"];
+            if (string.IsNullOrWhiteSpace(openAiModel))
+            {
+                openAiModel = "gpt-4o-mini";
+            }
+
             var prompt = $"You are an expert code reviewer. Review the following code changes for bugs, security issues, and suggest improvements.\n\n{reviewInput}";
             var openAiRequest = new
             {
-                model = "gpt-4",
+                model = openAiModel,
                 messages = new[] {
                     new { role = "system", content = "You are an expert code reviewer." },
                     new { role = "user", content = prompt }
@@ -175,8 +187,67 @@ namespace ReviewWise.Api.Controllers
             var openAiResponse = await openAiClient.PostAsync("https://api.openai.com/v1/chat/completions", openAiContent);
             if (!openAiResponse.IsSuccessStatusCode)
             {
+                var openAiErrorBody = await openAiResponse.Content.ReadAsStringAsync();
+
+                if (openAiResponse.StatusCode == HttpStatusCode.TooManyRequests)
+                {
+                    var useFallbackReview = _config.GetValue<bool?>("OpenAI:UseFallbackReviewWhenRateLimited") == true;
+                    if (useFallbackReview)
+                    {
+                        var fallbackReview = BuildRateLimitFallbackReview(owner, repo, prNumber, provider);
+                        _logger.LogWarning(
+                            "OpenAI rate-limited review generation for {Owner}/{Repo} PR #{PrNumber}. Returning configured fallback review.",
+                            owner,
+                            repo,
+                            prNumber);
+
+                        return Ok(new
+                        {
+                            review = fallbackReview,
+                            createdAt = DateTime.UtcNow,
+                            username,
+                            reused = false,
+                            providerFallback = true
+                        });
+                    }
+
+                    var retryAfterSeconds = ParseRetryAfterSeconds(openAiResponse.Headers.RetryAfter?.Delta);
+                    if (retryAfterSeconds is not null)
+                    {
+                        Response.Headers.RetryAfter = retryAfterSeconds.Value.ToString();
+                    }
+
+                    _logger.LogWarning(
+                        "OpenAI rate-limited review generation for {Owner}/{Repo} PR #{PrNumber}. Retry after {RetryAfterSeconds}s.",
+                        owner,
+                        repo,
+                        prNumber,
+                        retryAfterSeconds ?? 0);
+
+                    return StatusCode(StatusCodes.Status429TooManyRequests, new
+                    {
+                        message = retryAfterSeconds is not null
+                            ? $"AI provider rate limit reached. Try again in {retryAfterSeconds.Value} seconds."
+                            : "AI provider rate limit reached. Please wait a moment and try again.",
+                        retryAfterSeconds
+                    });
+                }
+
+                if (openAiResponse.StatusCode == HttpStatusCode.NotFound && IsModelNotFoundError(openAiErrorBody))
+                {
+                    _logger.LogError("Configured OpenAI model '{Model}' is unavailable for review generation.", openAiModel);
+                    return StatusCode(StatusCodes.Status502BadGateway, new
+                    {
+                        message = $"Configured OpenAI model '{openAiModel}' is not available for this API key. Update OpenAI:Model or API access."
+                    });
+                }
+
                 _logger.LogWarning("OpenAI request failed for {Owner}/{Repo} PR #{PrNumber} with status {StatusCode}.", owner, repo, prNumber, (int)openAiResponse.StatusCode);
-                return StatusCode((int)openAiResponse.StatusCode, await openAiResponse.Content.ReadAsStringAsync());
+                return StatusCode(StatusCodes.Status502BadGateway, new
+                {
+                    message = "AI review generation provider request failed.",
+                    providerStatusCode = (int)openAiResponse.StatusCode
+                });
             }
 
             var openAiJson = await openAiResponse.Content.ReadAsStringAsync();
@@ -210,6 +281,55 @@ namespace ReviewWise.Api.Controllers
                 username = reviewResult.Username,
                 reused = false
             });
+        }
+
+        private static bool IsModelNotFoundError(string responseBody)
+        {
+            if (string.IsNullOrWhiteSpace(responseBody))
+            {
+                return false;
+            }
+
+            try
+            {
+                using var doc = JsonDocument.Parse(responseBody);
+                var root = doc.RootElement;
+                if (!root.TryGetProperty("error", out var error))
+                {
+                    return false;
+                }
+
+                var code = error.TryGetProperty("code", out var codeElement)
+                    ? codeElement.GetString()
+                    : null;
+                return string.Equals(code, "model_not_found", StringComparison.OrdinalIgnoreCase);
+            }
+            catch (JsonException)
+            {
+                return false;
+            }
+        }
+
+        private static int? ParseRetryAfterSeconds(TimeSpan? retryAfterDelta)
+        {
+            if (retryAfterDelta is null)
+            {
+                return null;
+            }
+
+            var seconds = (int)Math.Ceiling(retryAfterDelta.Value.TotalSeconds);
+            return seconds > 0 ? seconds : null;
+        }
+
+        private static string BuildRateLimitFallbackReview(string owner, string repo, int prNumber, string provider)
+        {
+            return $"Temporary fallback review for {owner}/{repo} PR #{prNumber} ({provider}).\n\n" +
+                   "AI provider is currently rate-limited, so this is a lightweight placeholder result.\n" +
+                   "Please retry generation shortly to receive a full AI review with detailed findings.\n\n" +
+                   "Quick checklist while waiting:\n" +
+                   "- Verify high-risk file changes first (auth, data access, API boundaries).\n" +
+                   "- Check for null/edge-case handling and error paths.\n" +
+                   "- Validate security-sensitive changes and input handling.";
         }
     }
 }

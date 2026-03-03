@@ -70,19 +70,21 @@ export class ReviewDataEffects {
         this.api.getReviewResult(owner, repo, prNumber).pipe(
           map((response: { review?: string; createdAt?: string; username?: string }) => {
             const reviewText = response?.review ?? null;
+            if (!reviewText) {
+              return ReviewDataActions.loadLatestReviewSuccess({
+                reviewText: null,
+                reviewMeta: null,
+                reviewStatusMessage: 'No saved review yet. Click Generate review to create one.'
+              });
+            }
+
             return ReviewDataActions.loadLatestReviewSuccess({
               reviewText,
               reviewMeta: this.buildReviewMeta(response),
-              reviewStatusMessage: reviewText
-                ? 'Latest review loaded and displayed.'
-                : 'No latest review content was found.'
+              reviewStatusMessage: 'Latest review loaded and displayed.'
             });
           }),
           catchError((err: HttpErrorResponse) => {
-            if (err.status === 404) {
-              return of(ReviewDataActions.generateReview({ owner, repo, prNumber }));
-            }
-
             return of(ReviewDataActions.loadLatestReviewFailure({
               error: err.status === 401 || err.status === 403
                 ? 'Please log in to view review results.'
@@ -121,10 +123,12 @@ export class ReviewDataEffects {
               }));
             }
 
+            const backendMessage = this.getBackendErrorMessage(err);
+
             return of(ReviewDataActions.generateReviewFailure({
-              error: err.status === 401 || err.status === 403
+              error: backendMessage ?? (err.status === 401 || err.status === 403
                 ? 'Please log in to generate a review.'
-                : 'Failed to generate review.',
+                : 'Failed to generate review.'),
               reviewStatusMessage: 'Review generation failed.'
             }));
           })
@@ -153,6 +157,19 @@ export class ReviewDataEffects {
       if (!Number.isNaN(parsed) && parsed > 0) {
         return parsed;
       }
+    }
+
+    return null;
+  }
+
+  private getBackendErrorMessage(err: HttpErrorResponse): string | null {
+    const body = err.error as { message?: unknown } | string | null;
+    if (body && typeof body === 'object' && typeof body.message === 'string' && body.message.trim().length > 0) {
+      return body.message;
+    }
+
+    if (typeof body === 'string' && body.trim().length > 0) {
+      return body;
     }
 
     return null;
