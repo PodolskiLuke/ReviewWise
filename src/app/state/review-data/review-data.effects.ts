@@ -1,7 +1,7 @@
 import { inject, Injectable } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Actions, createEffect, ofType } from '@ngrx/effects';
-import { catchError, map, of, switchMap, timeout } from 'rxjs';
+import { catchError, filter, map, of, switchMap, timeout } from 'rxjs';
 import { ReviewWiseApiService } from '../../services/reviewwise-api.service';
 import * as ReviewDataActions from './review-data.actions';
 
@@ -72,6 +72,9 @@ export class ReviewDataEffects {
             const reviewText = response?.review ?? null;
             if (!reviewText) {
               return ReviewDataActions.loadLatestReviewSuccess({
+                owner,
+                repo,
+                prNumber,
                 reviewText: null,
                 reviewMeta: null,
                 reviewStatusMessage: 'No saved review yet. Click Generate review to create one.'
@@ -79,6 +82,9 @@ export class ReviewDataEffects {
             }
 
             return ReviewDataActions.loadLatestReviewSuccess({
+              owner,
+              repo,
+              prNumber,
               reviewText,
               reviewMeta: this.buildReviewMeta(response),
               reviewStatusMessage: 'Latest review loaded and displayed.'
@@ -86,11 +92,64 @@ export class ReviewDataEffects {
           }),
           catchError((err: HttpErrorResponse) => {
             return of(ReviewDataActions.loadLatestReviewFailure({
+              owner,
+              repo,
+              prNumber,
               error: err.status === 401 || err.status === 403
                 ? 'Please log in to view review results.'
                 : 'Failed to load review result.',
-              reviewStatusMessage: 'Loading latest review failed.'
+              reviewStatusMessage: 'Loading latest review failed.',
+              statusCode: Number.isFinite(err.status) ? err.status : null
             }));
+          })
+        )
+      )
+    )
+  );
+
+  readonly autoGenerateReviewWhenMissing$ = createEffect(() =>
+    this.actions$.pipe(
+      ofType(ReviewDataActions.loadLatestReviewSuccess),
+      filter(({ reviewText }) => !reviewText || reviewText.trim().length === 0),
+      map(({ owner, repo, prNumber }) => ReviewDataActions.generateReview({ owner, repo, prNumber }))
+    )
+  );
+
+  readonly autoGenerateReviewOnNotFound$ = createEffect(() =>
+    this.actions$.pipe(
+      ofType(ReviewDataActions.loadLatestReviewFailure),
+      filter(({ statusCode }) => statusCode === 404),
+      map(({ owner, repo, prNumber }) => ReviewDataActions.generateReview({ owner, repo, prNumber }))
+    )
+  );
+
+  readonly loadPullRequestFiles$ = createEffect(() =>
+    this.actions$.pipe(
+      ofType(ReviewDataActions.loadPullRequestFiles),
+      switchMap(({ owner, repo, prNumber }) =>
+        this.api.getPullRequestFiles(owner, repo, prNumber).pipe(
+          timeout(15000),
+          map((response) => {
+            const pullRequestFiles = this.normalizePullRequests(response);
+            if (!pullRequestFiles) {
+              return ReviewDataActions.loadPullRequestFilesFailure({
+                error: 'Changed files could not be read from the provider response.'
+              });
+            }
+
+            return ReviewDataActions.loadPullRequestFilesSuccess({ pullRequestFiles });
+          }),
+          catchError((err: HttpErrorResponse | { name?: string }) => {
+            const isTimeout = (err as { name?: string })?.name === 'TimeoutError';
+            const status = (err as HttpErrorResponse)?.status;
+
+            const error = isTimeout
+              ? 'Timed out while loading changed files. Please try selecting the pull request again.'
+              : status === 401 || status === 403
+                ? 'Please log in to view changed files.'
+                : 'Failed to load changed files.';
+
+            return of(ReviewDataActions.loadPullRequestFilesFailure({ error }));
           })
         )
       )

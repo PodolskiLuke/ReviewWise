@@ -2,9 +2,13 @@ import { CommonModule } from '@angular/common';
 import { ChangeDetectorRef, Component, DestroyRef, ElementRef, OnInit, ViewChild, inject } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
 import { Store } from '@ngrx/store';
 import * as ReviewDataActions from '../state/review-data/review-data.actions';
 import {
+  selectPullRequestFiles,
+  selectPullRequestFilesError,
+  selectPullRequestFilesLoading,
   selectPullRequests,
   selectPullRequestsError,
   selectPullRequestsLoading,
@@ -30,6 +34,7 @@ import {
 export class RepositoriesListComponent implements OnInit {
   @ViewChild('reviewPanel') reviewPanel?: ElementRef<HTMLElement>;
   private readonly destroyRef = inject(DestroyRef);
+  private readonly router = inject(Router);
 
   repositories: any[] = [];
   filteredRepositories: any[] = [];
@@ -42,6 +47,9 @@ export class RepositoriesListComponent implements OnInit {
   pullRequestsPageSize = 10;
   pullRequestsLoading = false;
   pullRequestsError: string | null = null;
+  pullRequestFiles: any[] = [];
+  pullRequestFilesLoading = false;
+  pullRequestFilesError: string | null = null;
   selectedPullRequest: any = null;
   reviewLoading = false;
   reviewError: string | null = null;
@@ -76,6 +84,9 @@ export class RepositoriesListComponent implements OnInit {
     this.currentPullRequestPage = 1;
     this.pullRequestsLoading = false;
     this.pullRequestsError = null;
+    this.pullRequestFiles = [];
+    this.pullRequestFilesLoading = false;
+    this.pullRequestFilesError = null;
     this.reviewError = null;
     this.reviewText = null;
     this.reviewMeta = null;
@@ -94,7 +105,25 @@ export class RepositoriesListComponent implements OnInit {
 
   selectPullRequest(pr: any) {
     this.store.dispatch(ReviewDataActions.selectPullRequest({ pullRequest: pr }));
+    this.dispatchLoadPullRequestFiles(pr);
     this.dispatchLoadLatestReview(pr);
+  }
+
+  openPullRequestFilesPage(pr: any) {
+    if (!this.selectedRepo || !pr) {
+      return;
+    }
+
+    const owner = this.getRepoOwner(this.selectedRepo);
+    const repoName = this.getRepoName(this.selectedRepo);
+    const prNumber = this.getPrNumber(pr);
+
+    if (!owner || !repoName || !prNumber) {
+      this.pullRequestsError = 'Could not determine repository or pull request details.';
+      return;
+    }
+
+    this.router.navigate(['/repositories', owner, repoName, 'pull-requests', prNumber, 'files']);
   }
 
   viewLatestReview() {
@@ -191,6 +220,27 @@ export class RepositoriesListComponent implements OnInit {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((loading) => {
         this.pullRequestsLoading = loading;
+        this.syncView();
+      });
+
+    this.store.select(selectPullRequestFiles)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((pullRequestFiles) => {
+        this.pullRequestFiles = pullRequestFiles;
+        this.syncView();
+      });
+
+    this.store.select(selectPullRequestFilesError)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((error) => {
+        this.pullRequestFilesError = error;
+        this.syncView();
+      });
+
+    this.store.select(selectPullRequestFilesLoading)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((loading) => {
+        this.pullRequestFilesLoading = loading;
         this.syncView();
       });
 
@@ -292,6 +342,36 @@ export class RepositoriesListComponent implements OnInit {
 
     this.store.dispatch(ReviewDataActions.loadLatestReview({ owner, repo: repoName, prNumber }));
     this.focusReviewPanel();
+  }
+
+  private dispatchLoadPullRequestFiles(pullRequest: any) {
+    if (!this.selectedRepo || !pullRequest) {
+      return;
+    }
+
+    const owner = this.getRepoOwner(this.selectedRepo);
+    const repoName = this.getRepoName(this.selectedRepo);
+    const prNumber = this.getPrNumber(pullRequest);
+
+    if (!owner || !repoName || !prNumber) {
+      this.pullRequestFilesError = 'Could not determine repository or pull request details.';
+      return;
+    }
+
+    this.store.dispatch(ReviewDataActions.loadPullRequestFiles({ owner, repo: repoName, prNumber }));
+  }
+
+  getPullRequestFilePath(file: any): string {
+    return file?.path ?? file?.filename ?? file?.new_path ?? file?.old_path ?? 'unknown-file';
+  }
+
+  getPullRequestFileStatus(file: any): string {
+    return (file?.status ?? 'modified').toString();
+  }
+
+  getPullRequestFileUrl(file: any): string | null {
+    const url = file?.url ?? file?.web_url ?? file?.blob_url ?? file?.blobUrl ?? null;
+    return typeof url === 'string' && url.trim().length > 0 ? url : null;
   }
 
   getPrLabel(pr: any): string {

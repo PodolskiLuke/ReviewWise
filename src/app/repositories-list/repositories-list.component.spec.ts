@@ -18,6 +18,9 @@ describe('RepositoriesListComponent', () => {
     pullRequestsLoading: false,
     pullRequestsError: null,
     selectedPullRequest: null,
+    pullRequestFiles: [],
+    pullRequestFilesLoading: false,
+    pullRequestFilesError: null,
     reviewLoading: false,
     reviewError: null,
     reviewText: null,
@@ -93,6 +96,9 @@ describe('RepositoriesListComponent', () => {
     component.selectPullRequest(pullRequest);
 
     expect(dispatchSpy).toHaveBeenCalledWith(ReviewDataActions.selectPullRequest({ pullRequest }));
+    expect(dispatchSpy).toHaveBeenCalledWith(
+      ReviewDataActions.loadPullRequestFiles({ owner: 'owner1', repo: 'repo1', prNumber: 7 })
+    );
     expect(dispatchSpy).toHaveBeenCalledWith(
       ReviewDataActions.loadLatestReview({ owner: 'owner1', repo: 'repo1', prNumber: 7 })
     );

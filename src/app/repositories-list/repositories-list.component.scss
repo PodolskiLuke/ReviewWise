@@ -242,6 +242,104 @@ li.selected {
   border-radius: 4px;
 }
 
+.changed-files-card {
+  margin: 0 0 0.85rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  background: #ffffff;
+  padding: 0.75rem;
+}
+
+.changed-files-card h4 {
+  margin: 0 0 0.55rem;
+  font-size: 0.95rem;
+  color: #172554;
+}
+
+.changed-files-list {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.changed-files-list li {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.file-path {
+  color: #0f172a;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+  font-size: 0.84rem;
+  line-height: 1.35;
+}
+
+.file-link-action {
+  color: #1e40af;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  justify-self: end;
+}
+
+.file-link-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+  color: #1d4ed8;
+}
+
+.file-link-action:hover {
+  text-decoration: underline;
+}
+
+.file-link-action:focus-visible {
+  outline: 3px solid #2563eb;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.external-indicator {
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.file-status {
+  color: #1e3a8a;
+  font-weight: 700;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.file-link-unavailable {
+  color: #94a3b8;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  justify-self: end;
+}
+
+.muted-inline {
+  margin: 0;
+  color: #64748b;
+}
+
+.error-inline {
+  margin: 0;
+  color: #b91c1c;
+  font-weight: 600;
+}
+
 .review-panel {
   margin-top: 0.75rem;
   border: 1px solid #cbd5e1;
@@ -391,6 +489,17 @@ li:focus-visible,
   .pagination-row {
     flex-wrap: wrap;
     justify-content: center;
+  }
+
+  .changed-files-list li {
+    align-items: flex-start;
+    grid-template-columns: 1fr;
+  }
+
+  .file-status,
+  .file-link-action,
+  .file-link-unavailable {
+    justify-self: start;
   }
 
   .review-actions {
