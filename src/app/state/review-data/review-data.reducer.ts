@@ -10,6 +10,9 @@ export interface ReviewDataState {
   pullRequestsLoading: boolean;
   pullRequestsError: string | null;
   selectedPullRequest: any | null;
+  pullRequestFiles: any[];
+  pullRequestFilesLoading: boolean;
+  pullRequestFilesError: string | null;
   reviewLoading: boolean;
   reviewError: string | null;
   reviewText: string | null;
@@ -27,6 +30,9 @@ const initialState: ReviewDataState = {
   pullRequestsLoading: false,
   pullRequestsError: null,
   selectedPullRequest: null,
+  pullRequestFiles: [],
+  pullRequestFilesLoading: false,
+  pullRequestFilesError: null,
   reviewLoading: false,
   reviewError: null,
   reviewText: null,
@@ -63,6 +69,9 @@ export const reviewDataFeature = createFeature({
       pullRequestsLoading: !!repository,
       pullRequestsError: null,
       selectedPullRequest: null,
+      pullRequestFiles: [],
+      pullRequestFilesLoading: false,
+      pullRequestFilesError: null,
       reviewLoading: false,
       reviewError: null,
       reviewText: null,
@@ -74,7 +83,10 @@ export const reviewDataFeature = createFeature({
       ...state,
       pullRequests: [],
       pullRequestsLoading: true,
-      pullRequestsError: null
+      pullRequestsError: null,
+      pullRequestFiles: [],
+      pullRequestFilesLoading: false,
+      pullRequestFilesError: null
     })),
     on(ReviewDataActions.loadPullRequestsSuccess, (state, { pullRequests }) => ({
       ...state,
@@ -91,12 +103,33 @@ export const reviewDataFeature = createFeature({
     on(ReviewDataActions.selectPullRequest, (state, { pullRequest }) => ({
       ...state,
       selectedPullRequest: pullRequest,
+      pullRequestFiles: [],
+      pullRequestFilesLoading: !!pullRequest,
+      pullRequestFilesError: null,
       reviewLoading: false,
       reviewError: null,
       reviewText: null,
       reviewMeta: null,
       reviewStatusMessage: null,
       reviewRetryAfterSeconds: null
+    })),
+    on(ReviewDataActions.loadPullRequestFiles, (state) => ({
+      ...state,
+      pullRequestFiles: [],
+      pullRequestFilesLoading: true,
+      pullRequestFilesError: null
+    })),
+    on(ReviewDataActions.loadPullRequestFilesSuccess, (state, { pullRequestFiles }) => ({
+      ...state,
+      pullRequestFiles,
+      pullRequestFilesLoading: false,
+      pullRequestFilesError: null
+    })),
+    on(ReviewDataActions.loadPullRequestFilesFailure, (state, { error }) => ({
+      ...state,
+      pullRequestFiles: [],
+      pullRequestFilesLoading: false,
+      pullRequestFilesError: error
     })),
     on(ReviewDataActions.loadLatestReview, (state) => ({
       ...state,

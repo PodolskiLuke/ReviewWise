@@ -1,0 +1,233 @@
+<section class="pr-files-page">
+  <header class="pr-files-header">
+    <a class="back-link" routerLink="/repositories">← Back to repositories</a>
+    <h1>PR #{{ prNumber() }} changed files</h1>
+    <p class="subtitle">{{ subtitle() }}</p>
+    @if (comparisonSummaryLine()) {
+      <p class="comparison-summary">Comparing {{ comparisonSummaryLine() }}</p>
+    }
+  </header>
+
+  @if (loading()) {
+    <p class="muted">Loading pull request files…</p>
+  }
+
+  @if (error()) {
+    <p class="error" role="alert">{{ error() }}</p>
+  }
+
+  @if (!loading() && !error()) {
+    <div class="layout">
+      <aside class="sidebar" aria-label="Changed files list">
+        <div class="sidebar-header">
+          <h2>Files</h2>
+          <span class="count-chip">{{ fileChangeSummary().total }}</span>
+        </div>
+
+        @if (files().length > 0) {
+          <div class="summary-strip" aria-label="File change summary">
+            <span class="status-pill status-pill--added">+ {{ fileChangeSummary().added }}</span>
+            <span class="status-pill status-pill--removed">- {{ fileChangeSummary().removed }}</span>
+            <span class="status-pill status-pill--modified">~ {{ fileChangeSummary().modified }}</span>
+            <span class="status-pill status-pill--renamed">↺ {{ fileChangeSummary().renamed }}</span>
+          </div>
+        }
+
+        @if (files().length === 0) {
+          <p class="muted">No files returned for this pull request.</p>
+        }
+
+        @if (files().length > 0) {
+          <ul class="file-tree" role="tree" aria-label="Changed file tree">
+            @for (entry of fileTreeEntries(); track entry.key) {
+              <li>
+                @if (entry.type === 'folder') {
+                  <button
+                    type="button"
+                    class="tree-btn folder-btn"
+                    [style.padding-left.px]="entry.depth * 16 + 8"
+                    (click)="toggleFolder(entry.key)"
+                    [attr.aria-expanded]="entry.expanded"
+                  >
+                    <span class="tree-icon" aria-hidden="true">{{ entry.expanded ? '▾' : '▸' }}</span>
+                    <span class="tree-label">{{ entry.name }}</span>
+                  </button>
+                } @else {
+                  <button
+                    type="button"
+                    class="tree-btn file-btn"
+                    [class.active]="selectedFilePath() === entry.path"
+                    [style.padding-left.px]="entry.depth * 16 + 24"
+                    (click)="selectFile(entry.path)"
+                    role="treeitem"
+                  >
+                    <span class="tree-icon" aria-hidden="true">•</span>
+                    <span class="tree-label">{{ entry.name }}</span>
+                    <span class="status-pill" [class]="'status-pill ' + getStatusBadgeClass(getFileStatus(entry.path))">
+                      {{ getStatusBadgeLabel(getFileStatus(entry.path)) }}
+                    </span>
+                  </button>
+                }
+              </li>
+            }
+          </ul>
+        }
+      </aside>
+
+      <section class="diff-panel" [class.wrap-lines]="wrapLines()" aria-label="Old and new versions">
+        @if (!selectedFile()) {
+          <p class="muted">Select a file to view changes.</p>
+        }
+
+        @if (selectedFile()) {
+          <header class="diff-header">
+            <div class="diff-title-group">
+              <h2>{{ selectedFile()!.path }}</h2>
+              <span class="status-pill" [class]="'status-pill ' + getStatusBadgeClass(selectedFileStatus())">{{ getStatusBadgeLabel(selectedFileStatus()) }}</span>
+            </div>
+            <div class="diff-actions">
+              <div class="view-toggle" role="tablist" aria-label="Diff view mode">
+                <button type="button" class="toggle-btn" [class.active]="viewMode() === 'side-by-side'" (click)="setViewMode('side-by-side')">Side by side</button>
+                <button type="button" class="toggle-btn" [class.active]="viewMode() === 'unified'" (click)="setViewMode('unified')">Unified</button>
+              </div>
+              <button type="button" class="toggle-btn wrap-toggle" [class.active]="wrapLines()" (click)="toggleWrapLines()">Wrap lines</button>
+              @if (selectedFileDownloadUrl()) {
+                <a [href]="selectedFileDownloadUrl()" target="_blank" rel="noopener noreferrer" class="open-provider">Download raw ↗</a>
+              }
+              @if (selectedFile()!.url) {
+                <a [href]="selectedFile()!.url" target="_blank" rel="noopener noreferrer" class="open-provider">Open provider diff ↗</a>
+              }
+            </div>
+          </header>
+
+          <div class="diff-legend" aria-label="Diff color legend">
+            <span class="legend-item added"><span class="swatch"></span>Added</span>
+            <span class="legend-item removed"><span class="swatch"></span>Removed</span>
+            <span class="legend-item changed"><span class="swatch"></span>Changed</span>
+          </div>
+
+          @if (viewMode() === 'side-by-side') {
+            @if (fileContentLoading()) {
+              <p class="muted">Loading full old/new file contents…</p>
+            }
+
+            @if (fileContentError()) {
+              <p class="error" role="alert">{{ fileContentError() }}</p>
+            }
+
+            @if (!fileContentLoading() && selectedFileRenderBlockMessage()) {
+              <div class="size-cap-warning" role="status">
+                <p>{{ selectedFileRenderBlockMessage() }}</p>
+                @if (selectedFileDownloadUrl()) {
+                  <a [href]="selectedFileDownloadUrl()" target="_blank" rel="noopener noreferrer" class="open-provider">Download raw file ↗</a>
+                }
+              </div>
+            }
+
+            @if (!fileContentLoading() && !fileContentError() && !selectedFileRenderBlockMessage() && selectedFileSideBySideRows().length === 0) {
+              <p class="muted">No full file content available for this file.</p>
+            }
+
+            @if (!fileContentLoading() && !selectedFileRenderBlockMessage() && selectedFileSideBySideRows().length > 0) {
+              <div class="diff-table side-by-side-table" role="table" aria-label="Full file old and new side by side">
+                <div class="diff-head" role="rowgroup">
+                  <div role="columnheader">Old</div>
+                  <div role="columnheader">Old code</div>
+                  <div role="columnheader">New</div>
+                  <div role="columnheader">New code</div>
+                </div>
+
+                <div class="diff-body" role="rowgroup">
+                  @for (row of selectedFileSideBySideRows(); track $index) {
+                    <div class="diff-row" [class.added]="row.kind === 'added'" [class.removed]="row.kind === 'removed'" [class.changed]="row.kind === 'changed'" role="row">
+                      <div class="cell line-cell" role="cell">{{ row.oldLineNumber ?? '' }}</div>
+                      <div class="cell code-cell" role="cell"><code [innerHTML]="row.oldHtml"></code></div>
+                      <div class="cell line-cell" role="cell">{{ row.newLineNumber ?? '' }}</div>
+                      <div class="cell code-cell" role="cell"><code [innerHTML]="row.newHtml"></code></div>
+                    </div>
+                  }
+                </div>
+              </div>
+            }
+          }
+
+          @if (viewMode() === 'unified') {
+            @if (selectedFileRenderBlockMessage()) {
+              <div class="size-cap-warning" role="status">
+                <p>{{ selectedFileRenderBlockMessage() }}</p>
+                @if (selectedFileDownloadUrl()) {
+                  <a [href]="selectedFileDownloadUrl()" target="_blank" rel="noopener noreferrer" class="open-provider">Download raw file ↗</a>
+                }
+              </div>
+            }
+
+            @if (!selectedFileRenderBlockMessage() && !selectedFile()!.patch) {
+              <p class="muted">Unified diff preview is unavailable for this file.</p>
+            }
+
+            @if (!selectedFileRenderBlockMessage() && selectedFile()!.patch && selectedFileDiffRows().length === 0) {
+              <p class="muted">No line-level preview could be parsed for this diff.</p>
+            }
+
+            @if (!selectedFileRenderBlockMessage() && selectedFile()!.patch && selectedFileDiffRows().length > 0) {
+              <div class="diff-table unified-table" role="table" aria-label="Inline pull request diff">
+                <div class="diff-head" role="rowgroup">
+                  <div role="columnheader">Type</div>
+                  <div role="columnheader">Old</div>
+                  <div role="columnheader">New</div>
+                  <div role="columnheader">Code</div>
+                </div>
+
+                <div class="diff-body" role="rowgroup">
+                  @for (row of selectedFileDiffRows(); track $index) {
+                    <div class="diff-row" [class.added]="row.kind === 'added'" [class.removed]="row.kind === 'removed'" [class.hunk]="row.kind === 'hunk'" role="row">
+                      <div class="cell marker-cell" role="cell">{{ row.marker }}</div>
+                      <div class="cell line-cell" role="cell">{{ row.oldLineNumber ?? '' }}</div>
+                      <div class="cell line-cell" role="cell">{{ row.newLineNumber ?? '' }}</div>
+                      <div class="cell code-cell" role="cell">
+                        <code [innerHTML]="row.html"></code>
+                      </div>
+                    </div>
+                  }
+                </div>
+              </div>
+            }
+          }
+        }
+      </section>
+    </div>
+
+    <section class="review-panel" id="review-panel" aria-label="AI review">
+      <h2>AI review</h2>
+
+      @if (reviewStatusMessage()) {
+        <p class="review-status" role="status" aria-live="polite">{{ reviewStatusMessage() }}</p>
+      }
+
+      <div class="review-actions">
+        <button type="button" class="toggle-btn" (click)="generateReview()" [disabled]="isGenerateButtonDisabled()">
+          {{ generateButtonLabel() }}
+        </button>
+        <button type="button" class="toggle-btn" (click)="viewLatestReview()" [disabled]="reviewLoading()">
+          View latest review
+        </button>
+      </div>
+
+      @if (reviewError()) {
+        <p class="error" role="alert">{{ reviewError() }}</p>
+      }
+
+      @if (reviewMeta()) {
+        <p class="review-meta">{{ reviewMeta() }}</p>
+      }
+
+      @if (reviewLoading()) {
+        <p class="muted">Generating or loading review…</p>
+      }
+
+      @if (reviewText()) {
+        <pre class="review-output">{{ reviewText() }}</pre>
+      }
+    </section>
+  }
+</section>

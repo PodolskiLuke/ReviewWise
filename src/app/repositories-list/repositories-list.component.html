@@ -93,9 +93,9 @@
               [attr.aria-selected]="isPrSelected(pr)"
               role="option"
               tabindex="0"
-              (click)="selectPullRequest(pr)"
-              (keydown.enter)="selectPullRequest(pr)"
-              (keydown.space)="selectPullRequest(pr); $event.preventDefault()"
+              (click)="openPullRequestFilesPage(pr)"
+              (keydown.enter)="openPullRequestFilesPage(pr)"
+              (keydown.space)="openPullRequestFilesPage(pr); $event.preventDefault()"
             >
               <span class="pr-badge">#{{ pr.number ?? pr.iid ?? '?' }}</span>
               <span class="pr-title">{{ pr.title ?? getPrLabel(pr) }}</span>
@@ -118,11 +118,47 @@
           </div>
         }
       </section>
-      <p class="keyboard-hint">Keyboard: use Enter or Space to select a pull request.</p>
+      <p class="keyboard-hint">Keyboard: use Enter or Space to open the pull request files page.</p>
     }
 
     @if (selectedPullRequest) {
       <a class="skip-link" href="#review-panel">Skip to review panel</a>
+
+      <section class="changed-files-card" aria-label="Changed files">
+        <h4>Changed files</h4>
+
+        @if (pullRequestFilesLoading) {
+          <p class="muted-inline">Loading changed files…</p>
+        }
+
+        @if (pullRequestFilesError) {
+          <p class="error-inline" role="alert">{{ pullRequestFilesError }}</p>
+        }
+
+        @if (!pullRequestFilesLoading && !pullRequestFilesError && pullRequestFiles.length === 0) {
+          <p class="muted-inline">No changed files returned for this pull request.</p>
+        }
+
+        @if (!pullRequestFilesLoading && !pullRequestFilesError && pullRequestFiles.length > 0) {
+          <ul class="changed-files-list">
+            @for (file of pullRequestFiles; track getPullRequestFilePath(file)) {
+              <li>
+                <span class="file-path">{{ getPullRequestFilePath(file) }}</span>
+                <span class="file-status">{{ getPullRequestFileStatus(file) }}</span>
+
+                @if (getPullRequestFileUrl(file)) {
+                  <a class="file-link-action" [href]="getPullRequestFileUrl(file)" target="_blank" rel="noopener noreferrer" title="Open provider diff in new tab">
+                    <span class="file-link-label">Open diff</span>
+                    <span class="external-indicator" aria-hidden="true">↗</span>
+                  </a>
+                } @else {
+                  <span class="file-link-unavailable">No link</span>
+                }
+              </li>
+            }
+          </ul>
+        }
+      </section>
     }
 
     @if (!pullRequestsLoading && !pullRequestsError && (!pullRequests || pullRequests.length === 0)) {

@@ -37,6 +37,21 @@ export const selectPullRequest = createAction(
   props<{ pullRequest: any | null }>()
 );
 
+export const loadPullRequestFiles = createAction(
+  '[Review Data] Load Pull Request Files',
+  props<{ owner: string; repo: string; prNumber: number }>()
+);
+
+export const loadPullRequestFilesSuccess = createAction(
+  '[Review Data] Load Pull Request Files Success',
+  props<{ pullRequestFiles: any[] }>()
+);
+
+export const loadPullRequestFilesFailure = createAction(
+  '[Review Data] Load Pull Request Files Failure',
+  props<{ error: string }>()
+);
+
 export const loadLatestReview = createAction(
   '[Review Data] Load Latest Review',
   props<{ owner: string; repo: string; prNumber: number }>()
@@ -44,12 +59,12 @@ export const loadLatestReview = createAction(
 
 export const loadLatestReviewSuccess = createAction(
   '[Review Data] Load Latest Review Success',
-  props<{ reviewText: string | null; reviewMeta: string | null; reviewStatusMessage: string }>()
+  props<{ owner: string; repo: string; prNumber: number; reviewText: string | null; reviewMeta: string | null; reviewStatusMessage: string }>()
 );
 
 export const loadLatestReviewFailure = createAction(
   '[Review Data] Load Latest Review Failure',
-  props<{ error: string | null; reviewStatusMessage: string }>()
+  props<{ owner: string; repo: string; prNumber: number; error: string | null; reviewStatusMessage: string; statusCode?: number | null }>()
 );
 
 export const generateReview = createAction(

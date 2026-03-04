@@ -76,6 +76,9 @@ describe('ReviewDataEffects', () => {
     const result = await resultPromise;
 
     expect(result.type).toBe(ReviewDataActions.loadLatestReviewSuccess.type);
+    expect((result as ReturnType<typeof ReviewDataActions.loadLatestReviewSuccess>).owner).toBe('owner1');
+    expect((result as ReturnType<typeof ReviewDataActions.loadLatestReviewSuccess>).repo).toBe('repo1');
+    expect((result as ReturnType<typeof ReviewDataActions.loadLatestReviewSuccess>).prNumber).toBe(8);
     expect((result as ReturnType<typeof ReviewDataActions.loadLatestReviewSuccess>).reviewText).toBe('Stored review text');
     expect((result as ReturnType<typeof ReviewDataActions.loadLatestReviewSuccess>).reviewStatusMessage).toBe('Latest review loaded and displayed.');
   });
@@ -90,10 +93,69 @@ describe('ReviewDataEffects', () => {
 
     expect(result).toEqual(
       ReviewDataActions.loadLatestReviewSuccess({
+        owner: 'owner1',
+        repo: 'repo1',
+        prNumber: 9,
         reviewText: null,
         reviewMeta: null,
         reviewStatusMessage: 'No saved review yet. Click Generate review to create one.'
       })
+    );
+  });
+
+  it('should emit loadLatestReviewFailure with status code when latest review API fails', async () => {
+    apiServiceSpy.getReviewResult.and.returnValue(throwError(() => new HttpErrorResponse({ status: 404 })));
+
+    const resultPromise = firstValueFrom(effects.loadLatestReview$);
+    actions$.next(ReviewDataActions.loadLatestReview({ owner: 'owner1', repo: 'repo1', prNumber: 13 }));
+
+    const result = await resultPromise;
+
+    expect(result).toEqual(
+      ReviewDataActions.loadLatestReviewFailure({
+        owner: 'owner1',
+        repo: 'repo1',
+        prNumber: 13,
+        error: 'Failed to load review result.',
+        reviewStatusMessage: 'Loading latest review failed.',
+        statusCode: 404
+      })
+    );
+  });
+
+  it('should auto-generate review when latest review success has empty review text', async () => {
+    const resultPromise = firstValueFrom(effects.autoGenerateReviewWhenMissing$);
+    actions$.next(ReviewDataActions.loadLatestReviewSuccess({
+      owner: 'owner1',
+      repo: 'repo1',
+      prNumber: 22,
+      reviewText: null,
+      reviewMeta: null,
+      reviewStatusMessage: 'No saved review yet. Click Generate review to create one.'
+    }));
+
+    const result = await resultPromise;
+
+    expect(result).toEqual(
+      ReviewDataActions.generateReview({ owner: 'owner1', repo: 'repo1', prNumber: 22 })
+    );
+  });
+
+  it('should auto-generate review when latest review request fails with 404', async () => {
+    const resultPromise = firstValueFrom(effects.autoGenerateReviewOnNotFound$);
+    actions$.next(ReviewDataActions.loadLatestReviewFailure({
+      owner: 'owner1',
+      repo: 'repo1',
+      prNumber: 23,
+      error: 'Failed to load review result.',
+      reviewStatusMessage: 'Loading latest review failed.',
+      statusCode: 404
+    }));
+
+    const result = await resultPromise;
+
+    expect(result).toEqual(
+      ReviewDataActions.generateReview({ owner: 'owner1', repo: 'repo1', prNumber: 23 })
     );
   });
 
